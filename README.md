@@ -1,8 +1,3 @@
-Absolutely. For collaborators, the README should be more than a project description — it should act as the **technical handoff document** explaining the architecture, current implementation, data flow, ML methodology, API, frontend, phases completed, known limitations, and where future contributors should work.
-
-Below is a **complete structured `README.md`** tailored to your current Project Parali implementation. You can replace your existing `README.md` with this.
-
-````markdown
 # 🌾 Project Parali
 ## Satellite AI for Agricultural Waste Detection, Crop Transition Intelligence & Biomass Recovery
 
