@@ -15,7 +15,6 @@ env/
 
 # Earth Engine / Google credentials
 credentials/
-*.json
 
 # Temporary files
 src/temp_uploads/
