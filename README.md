@@ -1782,27 +1782,3 @@ Built for innovation in agricultural waste management.
 
 ````
 
-### One thing I'd add before collaborators join
-
-Your README will be much more useful if we also add a **`docs/` architecture folder** later:
-
-```text
-docs/
-├── architecture/
-│   ├── system-architecture.md
-│   ├── data-pipeline.md
-│   ├── ml-pipeline.md
-│   └── api-architecture.md
-│
-├── development/
-│   ├── setup.md
-│   ├── contribution-guide.md
-│   └── phase-roadmap.md
-│
-└── diagrams/
-    ├── system-architecture.png
-    ├── ml-pipeline.png
-    └── data-flow.png
-````
-
-
