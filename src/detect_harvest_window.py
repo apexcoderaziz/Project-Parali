@@ -6,12 +6,6 @@ import pandas as pd
 # CONFIG
 # =========================================================
 
-# Project root:
-#
-# Project-Parali/
-#     data/
-#     src/
-#
 BASE_DIR = os.path.abspath(
     os.path.join(
         os.path.dirname(__file__),
@@ -29,7 +23,7 @@ INPUT_PATH = os.path.join(
 )
 
 
-# Output harvest/crop-transition analysis
+# Output crop-transition analysis
 OUTPUT_PATH = os.path.join(
     BASE_DIR,
     "data",
@@ -81,7 +75,8 @@ if not os.path.exists(INPUT_PATH):
 # =========================================================
 
 df = pd.read_csv(
-    INPUT_PATH
+    INPUT_PATH,
+    dtype={"field_id": str}
 )
 
 
@@ -95,9 +90,14 @@ print(
 # CLEAN DATA
 # =========================================================
 
-df["field_id"] = pd.to_numeric(
-    df["field_id"],
-    errors="coerce"
+# IMPORTANT:
+# Field IDs such as 2020_34 and 2021_34
+# must remain strings.
+
+df["field_id"] = (
+    df["field_id"]
+    .astype(str)
+    .str.strip()
 )
 
 
@@ -126,14 +126,6 @@ df = df.dropna(
         "field_id",
         "date"
     ]
-)
-
-
-# Make field IDs integers
-
-df["field_id"] = (
-    df["field_id"]
-    .astype(int)
 )
 
 
@@ -260,7 +252,10 @@ for field_id in field_ids:
     candidate_date = None
     candidate_ndvi = None
     decline = None
-    status = "No significant transition detected"
+
+    status = (
+        "No significant transition detected"
+    )
 
 
     if not after_peak.empty:
@@ -276,8 +271,8 @@ for field_id in field_ids:
 
 
             current_decline = (
-                peak_ndvi -
-                current_ndvi
+                peak_ndvi
+                - current_ndvi
             )
 
 
@@ -306,8 +301,8 @@ for field_id in field_ids:
                 )
 
                 decline = (
-                    peak_ndvi -
-                    current_ndvi
+                    peak_ndvi
+                    - current_ndvi
                 )
 
                 status = (
@@ -376,6 +371,44 @@ results_df = pd.DataFrame(
 )
 
 
+# Ensure field IDs remain strings
+results_df["field_id"] = (
+    results_df["field_id"]
+    .astype(str)
+    .str.strip()
+)
+
+
+# =========================================================
+# VALIDATE UNIQUE FIELD IDs
+# =========================================================
+
+duplicate_ids = results_df[
+    results_df["field_id"].duplicated(
+        keep=False
+    )
+]
+
+
+if not duplicate_ids.empty:
+
+    print(
+        "\nWARNING: Duplicate field IDs detected:"
+    )
+
+    print(
+        duplicate_ids[
+            ["field_id"]
+        ]
+        .to_string(index=False)
+    )
+
+    raise ValueError(
+        "Duplicate field IDs detected "
+        "in harvest_windows.csv."
+    )
+
+
 # =========================================================
 # SAVE RESULTS
 # =========================================================
@@ -421,6 +454,12 @@ print(
 )
 
 
+print(
+    "Unique field IDs:",
+    results_df["field_id"].nunique()
+)
+
+
 detected_count = (
     results_df["candidate_date"]
     .notna()
@@ -434,8 +473,46 @@ print(
 )
 
 
+# =========================================================
+# FIELD 34 CHECK
+# =========================================================
+
 print(
-    "Output:"
+    "\nChecking Field 34 records:"
+)
+
+
+field_34_results = results_df[
+    results_df["field_id"].isin(
+        [
+            "2020_34",
+            "2021_34"
+        ]
+    )
+]
+
+
+if field_34_results.empty:
+
+    print(
+        "No 2020_34 / 2021_34 results found."
+    )
+
+else:
+
+    print(
+        field_34_results.to_string(
+            index=False
+        )
+    )
+
+
+# =========================================================
+# OUTPUT
+# =========================================================
+
+print(
+    "\nOutput:"
 )
 
 print(

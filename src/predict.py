@@ -37,13 +37,23 @@ CLASS_NAMES = [
 # =========================================================
 
 transform = transforms.Compose([
-    transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+    transforms.Resize(
+        (IMAGE_SIZE, IMAGE_SIZE)
+    ),
 
     transforms.ToTensor(),
 
     transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
+        mean=[
+            0.485,
+            0.456,
+            0.406
+        ],
+        std=[
+            0.229,
+            0.224,
+            0.225
+        ]
     )
 ])
 
@@ -149,17 +159,67 @@ class DualResNet(nn.Module):
 
 def load_model():
 
-    print("Loading model...")
+    print(
+        "\nLoading Project Parali model..."
+    )
 
-    print("Device:", DEVICE)
+    print(
+        f"Device: {DEVICE}"
+    )
 
-    print("Creating RGB backbone...")
+    print(
+        f"Model path: {MODEL_PATH}"
+    )
 
-    rgb_model, feature_size = create_backbone()
 
-    print("Creating SWIR backbone...")
+    # -----------------------------------------------------
+    # Check model
+    # -----------------------------------------------------
 
-    swir_model, _ = create_backbone()
+    if not os.path.exists(
+        MODEL_PATH
+    ):
+
+        print(
+            "\nERROR: Model not found:"
+        )
+
+        print(
+            MODEL_PATH
+        )
+
+        sys.exit(1)
+
+
+    # -----------------------------------------------------
+    # Create RGB backbone
+    # -----------------------------------------------------
+
+    print(
+        "\nCreating RGB backbone..."
+    )
+
+    rgb_model, feature_size = (
+        create_backbone()
+    )
+
+
+    # -----------------------------------------------------
+    # Create SWIR backbone
+    # -----------------------------------------------------
+
+    print(
+        "Creating SWIR backbone..."
+    )
+
+    swir_model, _ = (
+        create_backbone()
+    )
+
+
+    # -----------------------------------------------------
+    # Create dual model
+    # -----------------------------------------------------
 
     model = DualResNet(
         rgb_model,
@@ -167,33 +227,169 @@ def load_model():
         feature_size
     )
 
-    if not os.path.exists(MODEL_PATH):
 
-        print(
-            f"\nERROR: Model not found:"
-            f"\n{MODEL_PATH}"
-        )
-
-        sys.exit(1)
+    # -----------------------------------------------------
+    # Load trained weights
+    # -----------------------------------------------------
 
     print(
         "\nLoading trained weights..."
     )
 
-    model.load_state_dict(
-        torch.load(
-            MODEL_PATH,
-            map_location=DEVICE
-        )
+    checkpoint = torch.load(
+        MODEL_PATH,
+        map_location=DEVICE
     )
 
-    model = model.to(DEVICE)
+
+    print(
+        "Checkpoint loaded."
+    )
+
+
+    # -----------------------------------------------------
+    # Inspect checkpoint
+    # -----------------------------------------------------
+
+    if isinstance(
+        checkpoint,
+        dict
+    ):
+
+        print(
+            f"Checkpoint entries: "
+            f"{len(checkpoint)}"
+        )
+
+
+    model.load_state_dict(
+        checkpoint
+    )
+
+
+    # -----------------------------------------------------
+    # Move model to device
+    # -----------------------------------------------------
+
+    model = model.to(
+        DEVICE
+    )
 
     model.eval()
 
-    print("Model loaded successfully!")
+
+    print(
+        "Model loaded successfully!"
+    )
+
 
     return model
+
+
+# =========================================================
+# IMAGE STATISTICS
+# =========================================================
+
+def print_image_statistics(
+    name,
+    image_tensor
+):
+
+    tensor = (
+        image_tensor
+        .detach()
+        .cpu()
+    )
+
+
+    mean = (
+        tensor.mean()
+        .item()
+    )
+
+
+    std = (
+        tensor.std()
+        .item()
+    )
+
+
+    minimum = (
+        tensor.min()
+        .item()
+    )
+
+
+    maximum = (
+        tensor.max()
+        .item()
+    )
+
+
+    print(
+        f"\n{name} tensor statistics:"
+    )
+
+    print(
+        f"  Mean : {mean:.6f}"
+    )
+
+    print(
+        f"  Std  : {std:.6f}"
+    )
+
+    print(
+        f"  Min  : {minimum:.6f}"
+    )
+
+    print(
+        f"  Max  : {maximum:.6f}"
+    )
+
+
+# =========================================================
+# RAW IMAGE STATISTICS
+# =========================================================
+
+def print_raw_image_statistics(
+    name,
+    image
+):
+
+    array = np.asarray(
+        image
+    ).astype(
+        np.float32
+    )
+
+
+    print(
+        f"\n{name} original image:"
+    )
+
+    print(
+        f"  Size   : {image.size}"
+    )
+
+    print(
+        f"  Shape  : {array.shape}"
+    )
+
+    print(
+        f"  Mean   : {array.mean():.4f}"
+    )
+
+    print(
+        f"  Std    : {array.std():.4f}"
+    )
+
+    print(
+        f"  Min    : {array.min():.4f}"
+    )
+
+    print(
+        f"  Max    : {array.max():.4f}"
+    )
 
 
 # =========================================================
@@ -210,111 +406,329 @@ def predict(
     # Check files
     # -----------------------------------------------------
 
-    if not os.path.exists(rgb_path):
-
-        raise FileNotFoundError(
-            f"RGB image not found: {rgb_path}"
-        )
-
-    if not os.path.exists(swir_path):
-
-        raise FileNotFoundError(
-            f"SWIR image not found: {swir_path}"
-        )
-
-
-    # -----------------------------------------------------
-    # Load images
-    # -----------------------------------------------------
-
-    rgb = Image.open(
+    if not os.path.exists(
         rgb_path
-    ).convert("RGB")
+    ):
 
-    swir = Image.open(
+        raise FileNotFoundError(
+            f"RGB image not found: "
+            f"{rgb_path}"
+        )
+
+
+    if not os.path.exists(
         swir_path
-    ).convert("RGB")
+    ):
+
+        raise FileNotFoundError(
+            f"SWIR image not found: "
+            f"{swir_path}"
+        )
+
+
+    # -----------------------------------------------------
+    # Display input paths
+    # -----------------------------------------------------
+
+    print(
+        "\n===================================="
+    )
+
+    print(
+        "INPUT IMAGES"
+    )
+
+    print(
+        "===================================="
+    )
+
+    print(
+        f"RGB : {rgb_path}"
+    )
+
+    print(
+        f"SWIR: {swir_path}"
+    )
+
+
+    # -----------------------------------------------------
+    # Load RGB
+    # -----------------------------------------------------
+
+    rgb_image = Image.open(
+        rgb_path
+    ).convert(
+        "RGB"
+    )
+
+
+    # -----------------------------------------------------
+    # Load SWIR
+    # -----------------------------------------------------
+
+    swir_image = Image.open(
+        swir_path
+    ).convert(
+        "RGB"
+    )
+
+
+    # -----------------------------------------------------
+    # Print original image statistics
+    # -----------------------------------------------------
+
+    print_raw_image_statistics(
+        "RGB",
+        rgb_image
+    )
+
+
+    print_raw_image_statistics(
+        "SWIR",
+        swir_image
+    )
 
 
     # -----------------------------------------------------
     # Apply preprocessing
     # -----------------------------------------------------
 
-    rgb = transform(rgb)
+    rgb = transform(
+        rgb_image
+    )
 
-    swir = transform(swir)
+
+    swir = transform(
+        swir_image
+    )
+
+
+    # -----------------------------------------------------
+    # Print transformed statistics
+    # -----------------------------------------------------
+
+    print_image_statistics(
+        "RGB",
+        rgb
+    )
+
+
+    print_image_statistics(
+        "SWIR",
+        swir
+    )
 
 
     # -----------------------------------------------------
     # Add batch dimension
     # -----------------------------------------------------
 
-    rgb = rgb.unsqueeze(0)
+    rgb = rgb.unsqueeze(
+        0
+    )
 
-    swir = swir.unsqueeze(0)
+
+    swir = swir.unsqueeze(
+        0
+    )
 
 
     # -----------------------------------------------------
     # Move to device
     # -----------------------------------------------------
 
-    rgb = rgb.to(DEVICE)
+    rgb = rgb.to(
+        DEVICE
+    )
 
-    swir = swir.to(DEVICE)
+
+    swir = swir.to(
+        DEVICE
+    )
 
 
-    # -----------------------------------------------------
-    # Prediction
-    # -----------------------------------------------------
+    # =====================================================
+    # MODEL PREDICTION
+    # =====================================================
 
     with torch.no_grad():
+
+        # -------------------------------------------------
+        # Raw logits
+        # -------------------------------------------------
 
         outputs = model(
             rgb,
             swir
         )
 
-        probabilities = torch.softmax(
-            outputs,
-            dim=1
+
+        # -------------------------------------------------
+        # Softmax probabilities
+        # -------------------------------------------------
+
+        probabilities = (
+            torch.softmax(
+                outputs,
+                dim=1
+            )
         )
 
-        prediction = torch.argmax(
-            probabilities,
-            dim=1
-        ).item()
+
+        # -------------------------------------------------
+        # Prediction
+        # -------------------------------------------------
+
+        prediction = (
+            torch.argmax(
+                probabilities,
+                dim=1
+            ).item()
+        )
 
 
-    # -----------------------------------------------------
-    # Results
-    # -----------------------------------------------------
+    # =====================================================
+    # DEBUG OUTPUT
+    # =====================================================
 
-    predicted_class = CLASS_NAMES[
-        prediction
-    ]
-
-    confidence = probabilities[
-        0,
-        prediction
-    ].item() * 100
+    raw_logits = (
+        outputs[0]
+        .detach()
+        .cpu()
+        .numpy()
+    )
 
 
-    no_burn_probability = probabilities[
-        0,
-        0
-    ].item() * 100
+    probs = (
+        probabilities[0]
+        .detach()
+        .cpu()
+        .numpy()
+    )
 
-    burn_probability = probabilities[
-        0,
-        1
-    ].item() * 100
+
+    print(
+        "\n===================================="
+    )
+
+    print(
+        "MODEL DEBUG"
+    )
+
+    print(
+        "===================================="
+    )
+
+
+    print(
+        "\nRaw model logits:"
+    )
+
+
+    print(
+        f"  No Burn: "
+        f"{raw_logits[0]:.6f}"
+    )
+
+
+    print(
+        f"  Burn   : "
+        f"{raw_logits[1]:.6f}"
+    )
+
+
+    print(
+        "\nSoftmax probabilities:"
+    )
+
+
+    print(
+        f"  No Burn: "
+        f"{probs[0] * 100:.6f}%"
+    )
+
+
+    print(
+        f"  Burn   : "
+        f"{probs[1] * 100:.6f}%"
+    )
+
+
+    print(
+        "\nLogit difference:"
+    )
+
+
+    print(
+        f"  Burn - No Burn: "
+        f"{raw_logits[1] - raw_logits[0]:.6f}"
+    )
+
+
+    # =====================================================
+    # RESULTS
+    # =====================================================
+
+    predicted_class = (
+        CLASS_NAMES[
+            prediction
+        ]
+    )
+
+
+    confidence = (
+        probabilities[
+            0,
+            prediction
+        ].item()
+        * 100
+    )
+
+
+    no_burn_probability = (
+        probabilities[
+            0,
+            0
+        ].item()
+        * 100
+    )
+
+
+    burn_probability = (
+        probabilities[
+            0,
+            1
+        ].item()
+        * 100
+    )
 
 
     return {
-        "prediction": predicted_class,
-        "confidence": confidence,
-        "no_burn_probability": no_burn_probability,
-        "burn_probability": burn_probability
+
+        "prediction":
+            predicted_class,
+
+        "confidence":
+            confidence,
+
+        "no_burn_probability":
+            no_burn_probability,
+
+        "burn_probability":
+            burn_probability,
+
+        "raw_logits":
+            {
+                "no_burn":
+                    float(
+                        raw_logits[0]
+                    ),
+
+                "burn":
+                    float(
+                        raw_logits[1]
+                    )
+            }
     }
 
 
@@ -324,9 +738,21 @@ def predict(
 
 if __name__ == "__main__":
 
-    print("\n====================================")
-    print("PROJECT PARALI — BURN PREDICTION")
-    print("====================================\n")
+    print(
+        "\n===================================="
+    )
+
+    print(
+        "PROJECT PARALI"
+    )
+
+    print(
+        "BURN PREDICTION"
+    )
+
+    print(
+        "===================================="
+    )
 
 
     # -----------------------------------------------------
@@ -342,14 +768,19 @@ if __name__ == "__main__":
 
     if len(sys.argv) != 3:
 
-        print("\nUsage:")
+        print(
+            "\nUsage:"
+        )
 
         print(
             "python src/predict.py "
             "<rgb_image> <swir_image>"
         )
 
-        print("\nExample:")
+
+        print(
+            "\nExample:"
+        )
 
         print(
             "python src/predict.py "
@@ -357,12 +788,17 @@ if __name__ == "__main__":
             "data/swir.jpg"
         )
 
+
         sys.exit(1)
 
 
-    rgb_path = sys.argv[1]
+    rgb_path = (
+        sys.argv[1]
+    )
 
-    swir_path = sys.argv[2]
+    swir_path = (
+        sys.argv[2]
+    )
 
 
     # -----------------------------------------------------
@@ -377,31 +813,63 @@ if __name__ == "__main__":
 
 
     # -----------------------------------------------------
-    # Display result
+    # Display final result
     # -----------------------------------------------------
 
-    print("\n====================================")
-    print("PREDICTION RESULT")
-    print("====================================")
+    print(
+        "\n===================================="
+    )
+
+    print(
+        "PREDICTION RESULT"
+    )
+
+    print(
+        "===================================="
+    )
+
 
     print(
         f"\nPrediction : "
         f"{result['prediction']}"
     )
 
+
     print(
         f"Confidence : "
         f"{result['confidence']:.2f}%"
     )
+
 
     print(
         f"No Burn    : "
         f"{result['no_burn_probability']:.2f}%"
     )
 
+
     print(
         f"Burn       : "
         f"{result['burn_probability']:.2f}%"
     )
 
-    print("\n====================================")
+
+    print(
+        "\nRaw logits:"
+    )
+
+
+    print(
+        f"No Burn    : "
+        f"{result['raw_logits']['no_burn']:.6f}"
+    )
+
+
+    print(
+        f"Burn       : "
+        f"{result['raw_logits']['burn']:.6f}"
+    )
+
+
+    print(
+        "\n===================================="
+    )

@@ -10,6 +10,7 @@ import pandas as pd
 
 PROJECT_ID = "project-18808c04-2093-4bb1-940"
 
+
 # Project root:
 # Project-Parali/
 BASE_DIR = os.path.abspath(
@@ -19,6 +20,7 @@ BASE_DIR = os.path.abspath(
     )
 )
 
+
 # Input GeoJSON
 GEOJSON_PATH = os.path.join(
     BASE_DIR,
@@ -26,6 +28,7 @@ GEOJSON_PATH = os.path.join(
     "processed",
     "sangrur_fields.geojson"
 )
+
 
 # Output CSV
 OUTPUT_PATH = os.path.join(
@@ -35,15 +38,19 @@ OUTPUT_PATH = os.path.join(
     "field_ndvi_timeseries.csv"
 )
 
+
 # Process all fields
 MAX_FIELDS = None
+
 
 # 2020 observation period
 START_DATE = "2020-09-15"
 END_DATE = "2020-12-31"
 
+
 # Maximum cloud percentage
 CLOUD_PERCENT = 40
+
 
 # Sentinel-2 resolution
 SCALE = 10
@@ -153,7 +160,15 @@ for index, feature in enumerate(features):
 
 
     # -----------------------------------------------------
-    # CONSISTENT NUMERIC FIELD ID
+    # CONSISTENT STRING FIELD ID
+    # -----------------------------------------------------
+    #
+    # New IDs look like:
+    #
+    #   2020_34
+    #   2021_34
+    #
+    # They MUST remain strings.
     # -----------------------------------------------------
 
     raw_field_id = (
@@ -161,22 +176,20 @@ for index, feature in enumerate(features):
         or properties.get("id")
         or properties.get("ID")
         or properties.get("Id")
-        or index + 1
+        or str(index + 1)
     )
 
 
-    try:
+    field_id = str(
+        raw_field_id
+    ).strip()
 
-        field_id = int(
-            raw_field_id
+
+    if not field_id:
+
+        field_id = str(
+            index + 1
         )
-
-    except (
-        TypeError,
-        ValueError
-    ):
-
-        field_id = index + 1
 
 
     # -----------------------------------------------------
@@ -191,6 +204,11 @@ for index, feature in enumerate(features):
     )
 
 
+    field_category = str(
+        field_category
+    ).strip()
+
+
     # -----------------------------------------------------
     # CREATE EE GEOMETRY
     # -----------------------------------------------------
@@ -201,11 +219,11 @@ for index, feature in enumerate(features):
             geometry
         )
 
-    except Exception as e:
+    except Exception:
 
         print(
             f"Skipping field {field_id}: "
-            f"invalid geometry"
+            "invalid geometry"
         )
 
         continue
@@ -402,6 +420,7 @@ print(
     "\nStarting field-level extraction..."
 )
 
+
 print(
     "Processing one satellite image at a time."
 )
@@ -537,10 +556,28 @@ for image_index in range(
         )
 
 
+        if field_id is None:
+
+            continue
+
+
+        # IMPORTANT:
+        # Always preserve field IDs as strings.
+
+        field_id = str(
+            field_id
+        ).strip()
+
+
         field_category = properties.get(
             "field_category",
             ""
         )
+
+
+        field_category = str(
+            field_category
+        ).strip()
 
 
         ndvi = properties.get(
@@ -583,9 +620,11 @@ print(
     "\n======================================"
 )
 
+
 print(
     "Earth Engine extraction finished."
 )
+
 
 print(
     "Total downloaded observations:",
@@ -613,11 +652,20 @@ df = pd.DataFrame(
 # CLEAN DATA
 # =========================================================
 
-df["field_id"] = pd.to_numeric(
-    df["field_id"],
-    errors="coerce"
+# ---------------------------------------------------------
+# KEEP FIELD IDs AS STRINGS
+# ---------------------------------------------------------
+
+df["field_id"] = (
+    df["field_id"]
+    .astype(str)
+    .str.strip()
 )
 
+
+# ---------------------------------------------------------
+# Normalize date
+# ---------------------------------------------------------
 
 df["date"] = pd.to_datetime(
     df["date"],
@@ -625,11 +673,19 @@ df["date"] = pd.to_datetime(
 )
 
 
+# ---------------------------------------------------------
+# Normalize NDVI
+# ---------------------------------------------------------
+
 df["ndvi"] = pd.to_numeric(
     df["ndvi"],
     errors="coerce"
 )
 
+
+# ---------------------------------------------------------
+# Normalize NBR
+# ---------------------------------------------------------
 
 df["nbr"] = pd.to_numeric(
     df["nbr"],
@@ -637,7 +693,9 @@ df["nbr"] = pd.to_numeric(
 )
 
 
+# ---------------------------------------------------------
 # Remove invalid field/date rows
+# ---------------------------------------------------------
 
 df = df.dropna(
     subset=[
@@ -647,15 +705,9 @@ df = df.dropna(
 )
 
 
-# Convert field IDs to integers
-
-df["field_id"] = (
-    df["field_id"]
-    .astype(int)
-)
-
-
+# ---------------------------------------------------------
 # Sort
+# ---------------------------------------------------------
 
 df = df.sort_values(
     [
@@ -663,6 +715,83 @@ df = df.sort_values(
         "date"
     ]
 )
+
+
+# =========================================================
+# VALIDATE FIELD IDs
+# =========================================================
+
+unique_field_ids = (
+    df["field_id"]
+    .dropna()
+    .unique()
+)
+
+
+print(
+    "\nUnique field IDs in time series:",
+    len(unique_field_ids)
+)
+
+
+print(
+    "\nSample Field IDs:"
+)
+
+
+for field_id in sorted(
+    unique_field_ids
+)[:30]:
+
+    print(
+        " ",
+        field_id
+    )
+
+
+# =========================================================
+# SPECIFIC FIELD 34 CHECK
+# =========================================================
+
+print(
+    "\nChecking Field 34 records:"
+)
+
+
+field_34_ids = [
+    "2020_34",
+    "2021_34"
+]
+
+
+field_34_df = df[
+    df["field_id"].isin(
+        field_34_ids
+    )
+]
+
+
+if field_34_df.empty:
+
+    print(
+        "No 2020_34 / 2021_34 observations found."
+    )
+
+else:
+
+    print(
+        field_34_df[
+            [
+                "field_id",
+                "field_category",
+                "date",
+                "ndvi",
+                "nbr"
+            ]
+        ]
+        .head(10)
+        .to_string(index=False)
+    )
 
 
 # =========================================================
@@ -691,13 +820,16 @@ print(
     "\n======================================"
 )
 
+
 print(
     "PROJECT PARALI"
 )
 
+
 print(
     "SENTINEL-2 FIELD TIME SERIES"
 )
+
 
 print(
     "======================================"
@@ -728,26 +860,16 @@ print(
     "Output:"
 )
 
+
 print(
     OUTPUT_PATH
 )
 
 
 print(
-    "\nSample Field IDs:"
-)
-
-print(
-    sorted(
-        df["field_id"]
-        .unique()
-    )[:30]
-)
-
-
-print(
     "\nFirst 10 rows:"
 )
+
 
 print(
     df.head(10).to_string(
