@@ -17,6 +17,9 @@ import { useState } from "react";
 
 function FieldDrawer({
   fieldData,
+  harvestPrediction: liveHarvestPrediction = null,
+  harvestLoading = false,
+  harvestError = "",
   residueEstimate = null,
   residueLoading = false,
   residueError = "",
@@ -43,7 +46,10 @@ function FieldDrawer({
 
   const indicators = fieldData?.field_indicators || null;
   const transition = fieldData?.transition_analysis || null;
-  const harvestPrediction = fieldData?.harvest_prediction || null;
+  // Live Sentinel-2 harvest assessment is supplied by App.jsx.
+  // Keep the historical field-analysis payload separate so the drawer
+  // always displays the current live assessment when available.
+  const harvestPrediction = liveHarvestPrediction;
   const timeSeries = fieldData?.time_series || [];
   const category = fieldData?.field_category || "Unknown";
 
@@ -157,17 +163,36 @@ function FieldDrawer({
                 </div>
               </div>
 
-              {harvestPrediction && (
+              {(harvestLoading || harvestError || harvestPrediction) && (
                 <section className="field-drawer-section harvest-drawer-section">
 
                   <div className="field-drawer-section-title">
                     <Target size={17} />
 
                     <h3>
-                      Harvest Signal Assessment
+                      Live Harvest Signal Assessment
                     </h3>
                   </div>
 
+                  {harvestLoading && (
+                    <div className="transition-drawer-card">
+                      <strong>Analyzing live Sentinel-2 data...</strong>
+                      <p>
+                        Examining the latest usable NDVI/NBR observations and
+                        comparing current trends with historical transition timing.
+                      </p>
+                    </div>
+                  )}
+
+                  {!harvestLoading && harvestError && (
+                    <div className="transition-drawer-card">
+                      <strong>Live harvest assessment unavailable</strong>
+                      <p>{harvestError}</p>
+                    </div>
+                  )}
+
+                  {!harvestLoading && !harvestError && harvestPrediction && (
+                    <>
                   <div className="harvest-drawer-hero">
                     <div>
                       <span>Current satellite signal</span>
@@ -201,6 +226,22 @@ function FieldDrawer({
                           ?.nbr_decline_from_peak ?? "N/A"}
                       </strong>
                     </div>
+
+                    <div>
+                      <span>Observations</span>
+                      <strong>
+                        {harvestPrediction.signals?.observations ?? "N/A"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Signal strength</span>
+                      <strong>
+                        {harvestPrediction.signal_strength != null
+                          ? `${harvestPrediction.signal_strength}`
+                          : "N/A"}
+                      </strong>
+                    </div>
                   </div>
 
                   {harvestPrediction.signals?.candidate_date && (
@@ -211,6 +252,34 @@ function FieldDrawer({
                         <span>Historical transition candidate</span>
                         <strong>
                           {harvestPrediction.signals.candidate_date}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+
+                  {harvestPrediction.estimated_transition_window?.start && (
+                    <div className="harvest-drawer-window">
+                      <CalendarDays size={16} />
+
+                      <div>
+                        <span>Estimated transition window</span>
+                        <strong>
+                          {harvestPrediction.estimated_transition_window.start}
+                          {" → "}
+                          {harvestPrediction.estimated_transition_window.end}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+
+                  {harvestPrediction.latest_observation?.date && (
+                    <div className="harvest-drawer-window">
+                      <Satellite size={16} />
+
+                      <div>
+                        <span>Latest Sentinel-2 observation</span>
+                        <strong>
+                          {harvestPrediction.latest_observation.date}
                         </strong>
                       </div>
                     </div>
@@ -228,10 +297,11 @@ function FieldDrawer({
                   </div>
 
                   <p className="harvest-drawer-note">
-                    This is a Sentinel-2 crop-transition signal assessment,
-                    not a calibrated harvest probability or confirmed
-                    harvest date.
+                    {harvestPrediction.validation_note ||
+                      "This is a Sentinel-2 crop-transition signal assessment, not a calibrated harvest probability or confirmed harvest date."}
                   </p>
+                    </>
+                  )}
 
                 </section>
               )}

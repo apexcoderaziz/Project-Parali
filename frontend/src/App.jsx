@@ -486,28 +486,49 @@ function App() {
         `${API_URL}/field-analysis/${encodedFieldId}`
       );
 
-
       const data = await response.json();
 
-
       if (!response.ok) {
-
         throw new Error(
           data.detail ||
           "Field analysis failed"
         );
-
       }
-
 
       setFieldData(data);
 
-      setHarvestPrediction(
-        data?.harvest_prediction ||
-        null
-      );
-
+      // Live harvest assessment is intentionally loaded from the
+      // current Sentinel-2 endpoint instead of the historical
+      // /harvest-prediction endpoint.
+      setHarvestLoading(true);
       setHarvestError("");
+      setHarvestPrediction(null);
+
+      try {
+        const liveHarvestResponse = await fetch(
+          `${API_URL}/live-harvest-prediction/${encodedFieldId}`
+        );
+
+        const liveHarvestData = await liveHarvestResponse.json();
+
+        if (!liveHarvestResponse.ok) {
+          throw new Error(
+            liveHarvestData.detail ||
+            "Live harvest assessment failed"
+          );
+        }
+
+        setHarvestPrediction(liveHarvestData);
+      } catch (liveHarvestErr) {
+        console.error(
+          "Live harvest assessment error:",
+          liveHarvestErr
+        );
+        setHarvestPrediction(null);
+        setHarvestError(liveHarvestErr.message);
+      } finally {
+        setHarvestLoading(false);
+      }
 
       // Load residue, biomass cluster, and logistics estimates independently.
       // A failure in one planning layer should not hide the satellite field analysis.
@@ -598,7 +619,7 @@ function App() {
 
 
   // =====================================================
-  // HARVEST PREDICTION
+  // LIVE HARVEST PREDICTION
   // =====================================================
 
   const loadHarvestPrediction = async (
@@ -615,11 +636,11 @@ function App() {
 
     setHarvestLoading(true);
     setHarvestError("");
+    setHarvestPrediction(null);
 
     try {
-
       const response = await fetch(
-        `${API_URL}/harvest-prediction/${encodeURIComponent(
+        `${API_URL}/live-harvest-prediction/${encodeURIComponent(
           normalizedFieldId
         )}`
       );
@@ -629,18 +650,16 @@ function App() {
       if (!response.ok) {
         throw new Error(
           data.detail ||
-          "Harvest prediction failed"
+          "Live harvest assessment failed"
         );
       }
 
-      setHarvestPrediction(
-        data.prediction || null
-      );
+      // The live endpoint returns the assessment directly.
+      setHarvestPrediction(data);
 
     } catch (err) {
-
       console.error(
-        "Harvest prediction error:",
+        "Live harvest assessment error:",
         err
       );
 
@@ -650,7 +669,6 @@ function App() {
     } finally {
       setHarvestLoading(false);
     }
-
   };
 
 
@@ -1378,9 +1396,10 @@ function App() {
               <h2>Harvest Signal Assessment</h2>
 
               <p>
-                Analyze the selected field using its Sentinel-2 NDVI/NBR
-                time series. The result is a crop-transition signal, not
-                a calibrated probability or confirmed harvest date.
+                Analyze the selected field using the latest usable Sentinel-2
+                NDVI/NBR observations. The result is a live crop-transition
+                signal assessment, not a calibrated probability or confirmed
+                harvest date.
               </p>
             </div>
 
@@ -1426,6 +1445,12 @@ function App() {
                   <span className="harvest-asof">
                     Based on observations through {harvestPrediction.as_of_date || "N/A"}
                   </span>
+
+                  {harvestPrediction.latest_observation?.cloud_pct != null && (
+                    <span className="harvest-asof">
+                      Latest usable scene cloud cover: {harvestPrediction.latest_observation.cloud_pct}%
+                    </span>
+                  )}
                 </div>
 
                 <div className="harvest-horizon-card">
@@ -1443,6 +1468,20 @@ function App() {
                 </div>
 
               </div>
+
+              {harvestPrediction.estimated_transition_window?.start && (
+                <div className="harvest-window-card" style={{ marginTop: "16px" }}>
+                  <span>Estimated transition window</span>
+                  <strong>
+                    {harvestPrediction.estimated_transition_window.start}
+                    {" → "}
+                    {harvestPrediction.estimated_transition_window.end}
+                  </strong>
+                  <small>
+                    Based on current satellite signals and historical candidate-transition timing.
+                  </small>
+                </div>
+              )}
 
               <div className="harvest-detail-grid">
 
@@ -1503,6 +1542,13 @@ function App() {
                   <span>Latest NDVI</span>
                   <strong>
                     {harvestPrediction.signals?.latest_ndvi ?? "N/A"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Negative NDVI steps</span>
+                  <strong>
+                    {harvestPrediction.signals?.negative_steps ?? "N/A"}
                   </strong>
                 </div>
               </div>
@@ -1648,6 +1694,9 @@ function App() {
 
         <FieldDrawer
           fieldData={fieldData}
+          harvestPrediction={harvestPrediction}
+          harvestLoading={harvestLoading}
+          harvestError={harvestError}
           residueEstimate={residueEstimate}
           residueLoading={residueLoading}
           residueError={residueError}
@@ -1666,6 +1715,8 @@ function App() {
           onClose={() => {
             setFieldData(null);
             setFieldError("");
+            setHarvestPrediction(null);
+            setHarvestError("");
             setResidueEstimate(null);
             setResidueError("");
             setBiomassOpportunity(null);

@@ -32,6 +32,13 @@ except ImportError:
     from biomass_clustering import get_field_cluster
 
 
+# Live Sentinel-2 monitoring engine.
+try:
+    from .harvest_prediction import predict_harvest
+except ImportError:
+    from harvest_prediction import predict_harvest
+
+
 # =========================================================
 # PATHS
 # =========================================================
@@ -785,6 +792,29 @@ def harvest_prediction(field_id: str):
         "success": True,
         "prediction": calculate_harvest_prediction(field_id),
     }
+
+
+@app.get("/live-harvest-prediction/{field_id}")
+def live_harvest_prediction(field_id: str):
+    """
+    Return the current Sentinel-2 monitoring assessment for a field.
+
+    This is deliberately separate from /harvest-prediction/{field_id}.
+    The latter uses the historical 2020 field time series, while this route
+    calls the existing live Earth Engine Sentinel-2 engine.
+    """
+    try:
+        return predict_harvest(field_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # =========================================================

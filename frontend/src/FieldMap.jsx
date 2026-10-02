@@ -1,891 +1,1345 @@
 import {
-  CalendarDays,
-  ChevronDown,
-  ChevronUp,
-  Map,
-  Package,
-  Ruler,
-  TrendingUp,
-  Target,
-  Satellite,
-  Sprout,
-  TrendingDown,
-  Truck,
-  X
-} from "lucide-react";
-import { useState } from "react";
+  MapContainer,
+  TileLayer,
+  GeoJSON,
+  Marker,
+  useMap
+} from "react-leaflet";
 
-function FieldDrawer({
-  fieldData,
-  residueEstimate = null,
-  residueLoading = false,
-  residueError = "",
-  biomassOpportunity = null,
-  biomassOpportunityLoading = false,
-  biomassOpportunityError = "",
-  logisticsEstimate = null,
-  logisticsLoading = false,
-  logisticsError = "",
-  clusterEstimate = null,
-  clusterLoading = false,
-  clusterError = "",
-  open = false,
-  loading = false,
-  error = "",
-  onClose,
-  onAnalyze
-}) {
-  const [showTimeline, setShowTimeline] = useState(true);
+import {
+  useEffect,
+  useMemo
+} from "react";
 
-  if (!open) {
-    return null;
+import L from "leaflet";
+
+
+// =====================================================
+// CATEGORY COLORS
+// =====================================================
+
+const getCategoryStyle = (category) => {
+  const normalizedCategory =
+    String(category || "")
+      .toLowerCase()
+      .trim();
+
+  // Unburnt
+  if (
+    normalizedCategory === "unburnt" ||
+    normalizedCategory === "unburned"
+  ) {
+    return {
+      color: "#15803d",
+      weight: 2,
+      fillColor: "#22c55e",
+      fillOpacity: 0.25
+    };
   }
 
-  const indicators = fieldData?.field_indicators || null;
-  const transition = fieldData?.transition_analysis || null;
-  const harvestPrediction = fieldData?.harvest_prediction || null;
-  const timeSeries = fieldData?.time_series || [];
-  const category = fieldData?.field_category || "Unknown";
+  // Partially burnt
+  if (
+    normalizedCategory === "partially_burnt" ||
+    normalizedCategory === "partially burnt" ||
+    normalizedCategory === "partial_burnt" ||
+    normalizedCategory === "partial burnt"
+  ) {
+    return {
+      color: "#c2410c",
+      weight: 2,
+      fillColor: "#f97316",
+      fillOpacity: 0.30
+    };
+  }
 
-  const formatValue = (value, digits = 4) => {
-    if (value === null || value === undefined || value === "") {
-      return "N/A";
+  // Completely burnt
+  if (
+    normalizedCategory === "completely_burnt" ||
+    normalizedCategory === "completely burnt" ||
+    normalizedCategory === "burnt" ||
+    normalizedCategory === "burned"
+  ) {
+    return {
+      color: "#b91c1c",
+      weight: 2,
+      fillColor: "#ef4444",
+      fillOpacity: 0.30
+    };
+  }
+
+  // Unknown
+  return {
+    color: "#6b7280",
+    weight: 2,
+    fillColor: "#9ca3af",
+    fillOpacity: 0.20
+  };
+};
+
+
+// =====================================================
+// FIELD INTELLIGENCE HELPERS
+// =====================================================
+
+const getIndicators = (feature) => {
+  return (
+    feature?.properties?.field_indicators ||
+    feature?.properties?.indicators ||
+    {}
+  );
+};
+
+
+const getFieldId = (feature, index) => {
+  const rawFieldId =
+    feature?.properties?.field_id;
+
+  // IMPORTANT:
+  // IDs such as 2020_34 and 2021_34
+  // must remain strings.
+
+  if (
+    rawFieldId !== null &&
+    rawFieldId !== undefined &&
+    String(rawFieldId).trim() !== ""
+  ) {
+    return String(rawFieldId).trim();
+  }
+
+  return `field-${index + 1}`;
+};
+
+
+const getCategory = (feature) => {
+  const indicators =
+    getIndicators(feature);
+
+  return (
+    feature?.properties?.category ||
+    feature?.properties?.field_category ||
+    indicators?.category ||
+    "Unknown"
+  );
+};
+
+
+const getFieldStatus = (feature) => {
+  const indicators =
+    getIndicators(feature);
+
+  return (
+    feature?.properties?.field_status ||
+    indicators?.field_status ||
+    "Unknown"
+  );
+};
+
+
+const getCandidateDate = (feature) => {
+  const indicators =
+    getIndicators(feature);
+
+  return (
+    feature?.properties?.candidate_date ||
+    indicators?.candidate_date ||
+    null
+  );
+};
+
+
+const getNdviTrend = (feature) => {
+  const indicators =
+    getIndicators(feature);
+
+  return (
+    feature?.properties?.ndvi_trend ||
+    indicators?.ndvi_trend ||
+    null
+  );
+};
+
+
+const getNbrTrend = (feature) => {
+  const indicators =
+    getIndicators(feature);
+
+  return (
+    feature?.properties?.nbr_trend ||
+    indicators?.nbr_trend ||
+    null
+  );
+};
+
+
+const isTransitionCandidate = (feature) => {
+  const status =
+    String(getFieldStatus(feature))
+      .toLowerCase()
+      .trim();
+
+  const candidateDate =
+    getCandidateDate(feature);
+
+  return (
+    Boolean(candidateDate) ||
+    status === "crop_transition_candidate" ||
+    status.includes("crop-transition") ||
+    status.includes("transition candidate")
+  );
+};
+
+
+// =====================================================
+// TRANSITION MAP STYLE
+// =====================================================
+
+const getTransitionStyle = (
+  baseStyle,
+  feature
+) => {
+  if (!isTransitionCandidate(feature)) {
+    return baseStyle;
+  }
+
+  return {
+    ...baseStyle,
+
+    // Yellow dashed border represents
+    // crop-transition candidate signal.
+    color: "#eab308",
+
+    weight: 3,
+
+    dashArray: "7 5",
+
+    fillOpacity:
+      Math.min(
+        0.42,
+        (baseStyle.fillOpacity || 0.25) + 0.08
+      )
+  };
+};
+
+
+// =====================================================
+// MAP SIZE FIX
+// =====================================================
+
+function MapSizeFix() {
+  const map = useMap();
+
+  useEffect(() => {
+    const invalidateMap = () => {
+      map.invalidateSize({
+        animate: false,
+        pan: false
+      });
+    };
+
+    // Initial fix
+    invalidateMap();
+
+    // Fix after layout settles
+    const timers = [
+      setTimeout(invalidateMap, 100),
+      setTimeout(invalidateMap, 500),
+      setTimeout(invalidateMap, 1000)
+    ];
+
+    window.addEventListener(
+      "resize",
+      invalidateMap
+    );
+
+    return () => {
+      timers.forEach(clearTimeout);
+
+      window.removeEventListener(
+        "resize",
+        invalidateMap
+      );
+    };
+  }, [map]);
+
+  return null;
+}
+
+
+// =====================================================
+// FIT MAP TO ALL FIELDS
+// =====================================================
+
+function FitBounds({
+  geojson
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (
+      !geojson ||
+      !geojson.features ||
+      geojson.features.length === 0
+    ) {
+      return;
     }
 
-    const number = Number(value);
+    try {
+      const layer =
+        L.geoJSON(geojson);
 
-    return Number.isFinite(number)
-      ? number.toFixed(digits)
-      : String(value);
-  };
+      const bounds =
+        layer.getBounds();
 
-  const formatLabel = (value) => {
-    if (!value) return "Unknown";
+      if (bounds.isValid()) {
+        map.fitBounds(
+          bounds,
+          {
+            padding: [30, 30],
+            maxZoom: 13,
+            animate: true
+          }
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Failed to fit map bounds:",
+        error
+      );
+    }
+  }, [geojson, map]);
 
-    return String(value)
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  };
+  return null;
+}
 
-  const latest = fieldData?.latest_observation || {};
-  const cluster = clusterEstimate?.collection_cluster || null;
-  const aggregation = clusterEstimate?.aggregation_effect || null;
+
+// =====================================================
+// CUSTOM MAP CONTROLS
+// =====================================================
+
+function MapControls({
+  geojson
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const control =
+      L.control({
+        position: "topright"
+      });
+
+    control.onAdd = () => {
+      const container =
+        L.DomUtil.create(
+          "div",
+          "parali-map-controls"
+        );
+
+      container.style.display =
+        "flex";
+
+      container.style.flexDirection =
+        "column";
+
+      container.style.gap =
+        "6px";
+
+
+      // -------------------------------------------------
+      // BUTTON CREATOR
+      // -------------------------------------------------
+
+      const createButton = (
+        label,
+        title,
+        callback
+      ) => {
+        const button =
+          L.DomUtil.create(
+            "button",
+            "parali-map-control-button",
+            container
+          );
+
+        button.type = "button";
+
+        button.innerHTML =
+          label;
+
+        button.title =
+          title;
+
+        button.setAttribute(
+          "aria-label",
+          title
+        );
+
+        button.style.width =
+          "38px";
+
+        button.style.height =
+          "38px";
+
+        button.style.border =
+          "1px solid #d1d5db";
+
+        button.style.borderRadius =
+          "8px";
+
+        button.style.background =
+          "#ffffff";
+
+        button.style.color =
+          "#111827";
+
+        button.style.fontSize =
+          "20px";
+
+        button.style.fontWeight =
+          "700";
+
+        button.style.lineHeight =
+          "1";
+
+        button.style.cursor =
+          "pointer";
+
+        button.style.display =
+          "flex";
+
+        button.style.alignItems =
+          "center";
+
+        button.style.justifyContent =
+          "center";
+
+        button.style.boxShadow =
+          "0 2px 8px rgba(0,0,0,0.18)";
+
+
+        // Prevent map dragging/zooming
+        // when interacting with controls.
+        L.DomEvent.disableClickPropagation(
+          button
+        );
+
+        L.DomEvent.on(
+          button,
+          "mousedown",
+          L.DomEvent.stopPropagation
+        );
+
+        L.DomEvent.on(
+          button,
+          "click",
+          (event) => {
+            L.DomEvent.stop(event);
+            callback();
+          }
+        );
+
+        return button;
+      };
+
+
+      // -------------------------------------------------
+      // ZOOM IN
+      // -------------------------------------------------
+
+      createButton(
+        "+",
+        "Zoom in",
+        () => {
+          map.zoomIn();
+        }
+      );
+
+
+      // -------------------------------------------------
+      // ZOOM OUT
+      // -------------------------------------------------
+
+      createButton(
+        "−",
+        "Zoom out",
+        () => {
+          map.zoomOut();
+        }
+      );
+
+
+      // -------------------------------------------------
+      // HOME / RESET
+      // -------------------------------------------------
+
+      createButton(
+        "⌂",
+        "Reset map to all fields",
+        () => {
+          if (
+            geojson &&
+            geojson.features &&
+            geojson.features.length > 0
+          ) {
+            const bounds =
+              L.geoJSON(
+                geojson
+              ).getBounds();
+
+            if (bounds.isValid()) {
+              map.fitBounds(
+                bounds,
+                {
+                  padding: [30, 30],
+                  maxZoom: 13,
+                  animate: true
+                }
+              );
+
+              return;
+            }
+          }
+
+          map.setView(
+            [30.0, 75.0],
+            10,
+            {
+              animate: true
+            }
+          );
+        }
+      );
+
+
+      // -------------------------------------------------
+      // FULLSCREEN
+      // -------------------------------------------------
+
+      const fullscreenButton =
+        createButton(
+          "⛶",
+          "Enter fullscreen",
+          () => {
+            const mapContainer =
+              map.getContainer();
+
+            if (
+              document.fullscreenElement
+            ) {
+              if (
+                document.exitFullscreen
+              ) {
+                document.exitFullscreen();
+              }
+
+              return;
+            }
+
+            if (
+              mapContainer.requestFullscreen
+            ) {
+              mapContainer.requestFullscreen();
+            }
+          }
+        );
+
+
+      // -------------------------------------------------
+      // FULLSCREEN STATE
+      // -------------------------------------------------
+
+      const handleFullscreenChange =
+        () => {
+          if (
+            document.fullscreenElement
+          ) {
+            fullscreenButton.title =
+              "Exit fullscreen";
+
+            fullscreenButton.setAttribute(
+              "aria-label",
+              "Exit fullscreen"
+            );
+          } else {
+            fullscreenButton.title =
+              "Enter fullscreen";
+
+            fullscreenButton.setAttribute(
+              "aria-label",
+              "Enter fullscreen"
+            );
+          }
+
+          setTimeout(() => {
+            map.invalidateSize();
+          }, 200);
+        };
+
+
+      document.addEventListener(
+        "fullscreenchange",
+        handleFullscreenChange
+      );
+
+
+      container._fullscreenHandler =
+        handleFullscreenChange;
+
+      return container;
+    };
+
+
+    control.addTo(map);
+
+
+    return () => {
+      const container =
+        control.getContainer();
+
+      if (
+        container?._fullscreenHandler
+      ) {
+        document.removeEventListener(
+          "fullscreenchange",
+          container._fullscreenHandler
+        );
+      }
+
+      map.removeControl(
+        control
+      );
+    };
+  }, [map, geojson]);
+
+  return null;
+}
+
+
+// =====================================================
+// ZOOM SLIDER
+// =====================================================
+
+function ZoomSlider() {
+  const map = useMap();
+
+  useEffect(() => {
+    const MIN_ZOOM = 8;
+    const MAX_ZOOM = 18;
+
+    const ZoomSliderControl =
+      L.Control.extend({
+        options: {
+          position: "bottomright"
+        },
+
+        onAdd() {
+          const container =
+            L.DomUtil.create(
+              "div",
+              "parali-zoom-slider"
+            );
+
+          container.style.background =
+            "#ffffff";
+
+          container.style.padding =
+            "8px 7px";
+
+          container.style.border =
+            "1px solid #d1d5db";
+
+          container.style.borderRadius =
+            "8px";
+
+          container.style.boxShadow =
+            "0 2px 8px rgba(0,0,0,0.18)";
+
+
+          // Slider
+          const slider =
+            L.DomUtil.create(
+              "input",
+              "",
+              container
+            );
+
+          slider.type =
+            "range";
+
+          slider.min =
+            String(MIN_ZOOM);
+
+          slider.max =
+            String(MAX_ZOOM);
+
+          slider.step =
+            "0.5";
+
+          slider.value =
+            String(map.getZoom());
+
+          slider.title =
+            "Map zoom level";
+
+          slider.setAttribute(
+            "aria-label",
+            "Map zoom level"
+          );
+
+          slider.style.width =
+            "105px";
+
+          slider.style.cursor =
+            "pointer";
+
+
+          // Zoom label
+          const zoomLabel =
+            L.DomUtil.create(
+              "div",
+              "",
+              container
+            );
+
+          zoomLabel.style.textAlign =
+            "center";
+
+          zoomLabel.style.fontSize =
+            "11px";
+
+          zoomLabel.style.fontWeight =
+            "600";
+
+          zoomLabel.style.color =
+            "#4b5563";
+
+          zoomLabel.style.marginTop =
+            "3px";
+
+
+          const updateLabel =
+            () => {
+              const zoom =
+                map.getZoom();
+
+              slider.value =
+                String(zoom);
+
+              zoomLabel.textContent =
+                `Zoom ${zoom.toFixed(1)}`;
+            };
+
+
+          updateLabel();
+
+
+          L.DomEvent.disableClickPropagation(
+            container
+          );
+
+
+          L.DomEvent.on(
+            slider,
+            "input",
+            (event) => {
+              const zoom =
+                Number(
+                  event.target.value
+                );
+
+              map.setZoom(
+                zoom,
+                {
+                  animate: false
+                }
+              );
+            }
+          );
+
+
+          map.on(
+            "zoomend",
+            updateLabel
+          );
+
+
+          container._cleanup =
+            () => {
+              map.off(
+                "zoomend",
+                updateLabel
+              );
+            };
+
+
+          return container;
+        },
+
+
+        onRemove() {
+          const container =
+            this.getContainer();
+
+          if (
+            container?._cleanup
+          ) {
+            container._cleanup();
+          }
+        }
+      });
+
+
+    const control =
+      new ZoomSliderControl();
+
+    map.addControl(control);
+
+
+    return () => {
+      map.removeControl(
+        control
+      );
+    };
+  }, [map]);
+
+  return null;
+}
+
+
+// =====================================================
+// MAP SCALE
+// =====================================================
+
+function MapScale() {
+  const map = useMap();
+
+  useEffect(() => {
+    const scale =
+      L.control.scale({
+        position: "bottomleft",
+        imperial: false,
+        metric: true,
+        maxWidth: 120
+      });
+
+    scale.addTo(map);
+
+    return () => {
+      map.removeControl(
+        scale
+      );
+    };
+  }, [map]);
+
+  return null;
+}
+
+
+// =====================================================
+// FIELD MARKERS
+// =====================================================
+
+function FieldMarkers({
+  geojson,
+  onFieldSelect
+}) {
+  const markers =
+    useMemo(() => {
+      if (
+        !geojson ||
+        !geojson.features
+      ) {
+        return [];
+      }
+
+      const result = [];
+
+      geojson.features.forEach(
+        (feature, index) => {
+          try {
+            const layer =
+              L.geoJSON(feature);
+
+            const bounds =
+              layer.getBounds();
+
+            if (
+              !bounds.isValid()
+            ) {
+              return;
+            }
+
+            const center =
+              bounds.getCenter();
+
+            const fieldId =
+              getFieldId(
+                feature,
+                index
+              );
+
+            const category =
+              getCategory(
+                feature
+              );
+
+            const transition =
+              isTransitionCandidate(
+                feature
+              );
+
+            result.push({
+              fieldId,
+              center,
+              category,
+              transition
+            });
+          } catch (error) {
+            console.error(
+              "Failed to create field marker:",
+              error
+            );
+          }
+        }
+      );
+
+      return result;
+    }, [geojson]);
+
 
   return (
     <>
-      <div
-        className="field-drawer-backdrop"
-        onClick={onClose}
-      />
+      {markers.map(
+        (marker) => {
+          const categoryStyle =
+            getCategoryStyle(
+              marker.category
+            );
 
-      <aside
-        className="field-drawer"
-        aria-label="Field intelligence"
-      >
-        <div className="field-drawer-header">
-          <div>
-            <div className="field-drawer-eyebrow">
-              FIELD INTELLIGENCE
-            </div>
+          const markerBorder =
+            marker.transition
+              ? "#eab308"
+              : "white";
 
-            <h2>
-              {fieldData?.field_id
-                ? `Field ${fieldData.field_id}`
-                : "Field Analysis"}
-            </h2>
-          </div>
 
-          <button
-            type="button"
-            className="field-drawer-close"
-            onClick={onClose}
-            aria-label="Close field analysis"
-          >
-            <X size={20} />
-          </button>
-        </div>
+          const icon =
+            L.divIcon({
+              className:
+                "field-number-marker",
 
-        <div className="field-drawer-content">
-
-          {loading && (
-            <div className="field-drawer-state">
-              <div className="field-drawer-spinner"></div>
-
-              <strong>
-                Analyzing satellite data
-              </strong>
-
-              <p>
-                Loading field indicators and Sentinel-2
-                observations...
-              </p>
-            </div>
-          )}
-
-          {!loading && error && (
-            <div className="field-drawer-error">
-              <strong>
-                Field analysis failed
-              </strong>
-
-              <p>{error}</p>
-
-              {onAnalyze && (
-                <button
-                  type="button"
-                  onClick={onAnalyze}
+              html: `
+                <div
+                  style="
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50%;
+                    background: ${categoryStyle.fillColor};
+                    color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 10px;
+                    font-weight: 700;
+                    border: 3px solid ${markerBorder};
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+                    white-space: nowrap;
+                  "
                 >
-                  Try again
-                </button>
-              )}
-            </div>
-          )}
-
-          {!loading && !error && fieldData && (
-            <>
-              <div className="field-status-card">
-                <div className="field-status-icon">
-                  <Satellite size={20} />
+                  ${marker.fieldId}
                 </div>
-
-                <div>
-                  <span>Field category</span>
-
-                  <strong>
-                    {formatLabel(category)}
-                  </strong>
-                </div>
-              </div>
-
-              {harvestPrediction && (
-                <section className="field-drawer-section harvest-drawer-section">
-
-                  <div className="field-drawer-section-title">
-                    <Target size={17} />
-
-                    <h3>
-                      Harvest Signal Assessment
-                    </h3>
-                  </div>
-
-                  <div className="harvest-drawer-hero">
-                    <div>
-                      <span>Current satellite signal</span>
-
-                      <strong>
-                        {harvestPrediction.status_label ||
-                          "Assessment available"}
-                      </strong>
-                    </div>
-
-                    <div className={`harvest-level harvest-level-${String(
-                      harvestPrediction.signal_level || "unknown"
-                    ).toLowerCase()}`}>
-                      {harvestPrediction.signal_level || "Unknown"}
-                    </div>
-                  </div>
-
-                  <div className="harvest-drawer-horizons">
-                    <div>
-                      <span>NDVI decline</span>
-                      <strong>
-                        {harvestPrediction.signals
-                          ?.ndvi_decline_from_peak ?? "N/A"}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>NBR decline</span>
-                      <strong>
-                        {harvestPrediction.signals
-                          ?.nbr_decline_from_peak ?? "N/A"}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {harvestPrediction.signals?.candidate_date && (
-                    <div className="harvest-drawer-window">
-                      <TrendingUp size={16} />
-
-                      <div>
-                        <span>Historical transition candidate</span>
-                        <strong>
-                          {harvestPrediction.signals.candidate_date}
-                        </strong>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="harvest-drawer-reasons">
-                    {(harvestPrediction.reasons || []).map(
-                      (reason) => (
-                        <div key={reason}>
-                          <span>✓</span>
-                          {reason}
-                        </div>
-                      )
-                    )}
-                  </div>
-
-                  <p className="harvest-drawer-note">
-                    This is a Sentinel-2 crop-transition signal assessment,
-                    not a calibrated harvest probability or confirmed
-                    harvest date.
-                  </p>
-
-                </section>
-              )}
-
-              <section className="field-drawer-section residue-drawer-section">
-
-                <div className="field-drawer-section-title">
-                  <Package size={17} />
-
-                  <h3>
-                    Crop Residue Intelligence
-                  </h3>
-                </div>
-
-                {residueLoading && (
-                  <div className="transition-drawer-card">
-                    <strong>Estimating residue...</strong>
-                    <p>
-                      Calculating biomass from field area and the
-                      configured agronomic assumptions.
-                    </p>
-                  </div>
-                )}
-
-                {!residueLoading && residueError && (
-                  <div className="transition-drawer-card">
-                    <strong>Residue estimate unavailable</strong>
-                    <p>{residueError}</p>
-                  </div>
-                )}
-
-                {!residueLoading && !residueError && residueEstimate && (
-                  <>
-                    <div className="field-drawer-grid">
-                      <div className="field-drawer-stat">
-                        <Package size={16} />
-                        <span>Gross residue</span>
-                        <strong>
-                          {residueEstimate.gross_residue_tonnes != null
-                            ? `${residueEstimate.gross_residue_tonnes} t`
-                            : "N/A"}
-                        </strong>
-                      </div>
-
-                      <div className="field-drawer-stat">
-                        <Package size={16} />
-                        <span>Recoverable biomass</span>
-                        <strong>
-                          {residueEstimate.recoverable_biomass_tonnes != null
-                            ? `${residueEstimate.recoverable_biomass_tonnes} t`
-                            : "N/A"}
-                        </strong>
-                      </div>
-
-                      <div className="field-drawer-stat">
-                        <Ruler size={16} />
-                        <span>Collection potential</span>
-                        <strong>
-                          {residueEstimate.collection_potential_percent != null
-                            ? `${residueEstimate.collection_potential_percent}%`
-                            : "N/A"}
-                        </strong>
-                      </div>
-
-                      <div className="field-drawer-stat">
-                        <Sprout size={16} />
-                        <span>Crop assumption</span>
-                        <strong>
-                          {formatLabel(residueEstimate.crop)}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div className="transition-drawer-card">
-                      <div className="transition-drawer-row">
-                        <span>Yield assumption</span>
-                        <strong>
-                          {residueEstimate.assumptions
-                            ?.yield_tonnes_per_hectare ?? "N/A"} t/ha
-                        </strong>
-                      </div>
-
-                      <div className="transition-drawer-row">
-                        <span>Residue-to-product ratio</span>
-                        <strong>
-                          {residueEstimate.assumptions
-                            ?.residue_to_product_ratio ?? "N/A"}
-                        </strong>
-                      </div>
-
-                      <div className="transition-drawer-row">
-                        <span>Collection efficiency</span>
-                        <strong>
-                          {residueEstimate.assumptions
-                            ?.collection_efficiency != null
-                            ? `${Math.round(
-                                residueEstimate.assumptions
-                                  .collection_efficiency * 100
-                              )}%`
-                            : "N/A"}
-                        </strong>
-                      </div>
-
-                      <p>
-                        These tonnes are assumption-based estimates.
-                        Satellite imagery provides field area and
-                        crop-transition context; it does not directly
-                        measure residue mass.
-                      </p>
-                    </div>
-                  </>
-                )}
-
-              </section>
-
-              {/* =====================================================
-                  BIOMASS OPPORTUNITY
-              ===================================================== */}
-
-              <section className="field-drawer-section">
-
-                <div className="field-drawer-section-title">
-                  <Map size={17} />
-                  <h3>Biomass Opportunity</h3>
-                </div>
-
-                {biomassOpportunityLoading && (
-                  <div className="transition-drawer-card">
-                    <strong>Finding nearby biomass facilities...</strong>
-                    <p>
-                      Screening recoverable biomass against the current
-                      facility registry.
-                    </p>
-                  </div>
-                )}
-
-                {!biomassOpportunityLoading && biomassOpportunityError && (
-                  <div className="transition-drawer-card">
-                    <strong>Opportunity analysis unavailable</strong>
-                    <p>{biomassOpportunityError}</p>
-                  </div>
-                )}
-
-                {!biomassOpportunityLoading &&
-                  !biomassOpportunityError &&
-                  biomassOpportunity && (
-                    <>
-                      <div className="field-drawer-grid">
-
-                        <div className="field-drawer-stat">
-                          <Package size={16} />
-                          <span>Recoverable biomass</span>
-                          <strong>
-                            {biomassOpportunity.recoverable_biomass_tonnes != null
-                              ? `${biomassOpportunity.recoverable_biomass_tonnes} t`
-                              : "N/A"}
-                          </strong>
-                        </div>
-
-                        <div className="field-drawer-stat">
-                          <Map size={16} />
-                          <span>Facilities found</span>
-                          <strong>
-                            {biomassOpportunity.facilities?.length ?? 0}
-                          </strong>
-                        </div>
-
-                      </div>
-
-                      {biomassOpportunity.nearest_facility ? (
-                        <div className="transition-drawer-card">
-
-                          <div className="transition-drawer-row">
-                            <span>Nearest facility</span>
-                            <strong>
-                              {biomassOpportunity.nearest_facility.name || "N/A"}
-                            </strong>
-                          </div>
-
-                          <div className="transition-drawer-row">
-                            <span>Type</span>
-                            <strong>
-                              {biomassOpportunity.nearest_facility.type || "N/A"}
-                            </strong>
-                          </div>
-
-                          <div className="transition-drawer-row">
-                            <span>Distance</span>
-                            <strong>
-                              {biomassOpportunity.nearest_facility.distance_km != null
-                                ? `${biomassOpportunity.nearest_facility.distance_km} km`
-                                : "N/A"}
-                            </strong>
-                          </div>
-
-                          <div className="transition-drawer-status">
-                            {formatLabel(
-                              biomassOpportunity.nearest_facility.opportunity_status
-                            )}
-                          </div>
-
-                          <p>
-                            Distance is a straight-line Haversine screening
-                            estimate from the field centroid.
-                          </p>
-
-                        </div>
-                      ) : (
-                        <div className="transition-drawer-card">
-                          <strong>No registered facility found.</strong>
-                          <p>
-                            The current facility registry may need to be
-                            expanded for this field.
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-              </section>
-
-              {/* =====================================================
-                  COLLECTION CLUSTER
-              ===================================================== */}
-
-              <section className="field-drawer-section">
-
-                <div className="field-drawer-section-title">
-                  <Truck size={17} />
-
-                  <h3>
-                    Biomass Collection Cluster
-                  </h3>
-                </div>
-
-                {clusterLoading && (
-                  <div className="transition-drawer-card">
-                    <strong>Finding nearby fields...</strong>
-                    <p>
-                      Aggregating nearby fields into a collection cluster.
-                    </p>
-                  </div>
-                )}
-
-                {!clusterLoading && clusterError && (
-                  <div className="transition-drawer-card">
-                    <strong>Cluster estimate unavailable</strong>
-                    <p>{clusterError}</p>
-                  </div>
-                )}
-
-                {!clusterLoading && !clusterError && cluster && (
-                  <>
-                    <div className="field-drawer-grid">
-
-                      <div className="field-drawer-stat">
-                        <Truck size={16} />
-                        <span>Cluster biomass</span>
-                        <strong>
-                          {cluster.recoverable_biomass_tonnes != null
-                            ? `${Number(
-                                cluster.recoverable_biomass_tonnes
-                              ).toFixed(2)} t`
-                            : "N/A"}
-                        </strong>
-                      </div>
-
-                      <div className="field-drawer-stat">
-                        <Map size={16} />
-                        <span>Fields aggregated</span>
-                        <strong>
-                          {cluster.field_count ?? "N/A"}
-                        </strong>
-                      </div>
-
-                      <div className="field-drawer-stat">
-                        <Truck size={16} />
-                        <span>Estimated truckloads</span>
-                        <strong>
-                          {cluster.estimated_truckloads ?? "N/A"}
-                        </strong>
-                      </div>
-
-                      <div className="field-drawer-stat">
-                        <Ruler size={16} />
-                        <span>Cluster radius</span>
-                        <strong>
-                          {cluster.radius_km != null
-                            ? `${cluster.radius_km} km`
-                            : "N/A"}
-                        </strong>
-                      </div>
-
-                    </div>
-
-                    {aggregation && (
-                      <div className="transition-drawer-card">
-
-                        <div className="transition-drawer-row">
-                          <span>This field</span>
-                          <strong>
-                            {aggregation
-                              .individual_field_recoverable_tonnes != null
-                              ? `${Number(
-                                  aggregation
-                                    .individual_field_recoverable_tonnes
-                                ).toFixed(2)} t`
-                              : "N/A"}
-                          </strong>
-                        </div>
-
-                        <div className="transition-drawer-row">
-                          <span>Aggregated supply</span>
-                          <strong>
-                            {aggregation
-                              .cluster_recoverable_tonnes != null
-                              ? `${Number(
-                                  aggregation.cluster_recoverable_tonnes
-                                ).toFixed(2)} t`
-                              : "N/A"}
-                          </strong>
-                        </div>
-
-                        <div className="transition-drawer-row">
-                          <span>Additional fields</span>
-                          <strong>
-                            {aggregation.additional_fields_aggregated ?? "N/A"}
-                          </strong>
-                        </div>
-
-                        <p>
-                          Nearby fields are grouped so a small individual
-                          field load can be considered as part of an
-                          aggregated collection opportunity.
-                        </p>
-
-                      </div>
-                    )}
-
-                    <div className="transition-drawer-card">
-                      <div className="transition-drawer-row">
-                        <span>Truck capacity assumption</span>
-                        <strong>
-                          {cluster.truck_capacity_tonnes ?? "N/A"} t
-                        </strong>
-                      </div>
-
-                      <p>
-                        Truckload count is a simplified planning estimate.
-                        It does not confirm farmer participation, actual
-                        truck availability, loading constraints, or routes.
-                      </p>
-                    </div>
-                  </>
-                )}
-
-              </section>
-
-              {/* =====================================================
-                  LOGISTICS
-              ===================================================== */}
-
-              {logisticsEstimate && (
-                <section className="field-drawer-section">
-
-                  <div className="field-drawer-section-title">
-                    <Truck size={17} />
-
-                    <h3>
-                      Biomass Logistics
-                    </h3>
-                  </div>
-
-                  <div className="field-drawer-grid">
-
-                    <div className="field-drawer-stat">
-                      <Map size={16} />
-                      <span>Nearest facility</span>
-                      <strong>
-                        {logisticsEstimate.nearest_facility?.name ||
-                          "N/A"}
-                      </strong>
-                    </div>
-
-                    <div className="field-drawer-stat">
-                      <Ruler size={16} />
-                      <span>Straight-line distance</span>
-                      <strong>
-                        {logisticsEstimate.nearest_facility?.straight_line_distance_km != null
-                          ? `${logisticsEstimate.nearest_facility.straight_line_distance_km} km`
-                          : "N/A"}
-                      </strong>
-                    </div>
-
-                    <div className="field-drawer-stat">
-                      <Ruler size={16} />
-                      <span>Estimated road distance</span>
-                      <strong>
-                        {logisticsEstimate.transport?.estimated_road_distance_km != null
-                          ? `${logisticsEstimate.transport.estimated_road_distance_km} km`
-                          : "N/A"}
-                      </strong>
-                    </div>
-
-                    <div className="field-drawer-stat">
-                      <Package size={16} />
-                      <span>Transport cost</span>
-                      <strong>
-                        {logisticsEstimate.transport?.estimated_transport_cost_inr != null
-                          ? `₹${Number(
-                              logisticsEstimate.transport.estimated_transport_cost_inr
-                            ).toFixed(0)}`
-                          : "N/A"}
-                      </strong>
-                    </div>
-
-                  </div>
-
-                  <div className="transition-drawer-card">
-
-                    <div className="transition-drawer-row">
-                      <span>Logistics status</span>
-                      <strong>
-                        {formatLabel(
-                          logisticsEstimate.logistics_status
-                        )}
-                      </strong>
-                    </div>
-
-                    <div className="transition-drawer-row">
-                      <span>Cost per tonne</span>
-                      <strong>
-                        {logisticsEstimate.transport?.estimated_cost_per_tonne_inr != null
-                          ? `₹${Number(
-                              logisticsEstimate.transport.estimated_cost_per_tonne_inr
-                            ).toFixed(0)}/t`
-                          : "N/A"}
-                      </strong>
-                    </div>
-
-                    <div className="transition-drawer-row">
-                      <span>Search radius</span>
-                      <strong>
-                        {logisticsEstimate.facility_matching?.search_radius_km != null
-                          ? `${logisticsEstimate.facility_matching.search_radius_km} km`
-                          : "N/A"}
-                      </strong>
-                    </div>
-
-                    <p>
-                      {logisticsEstimate.methodology ||
-                        "Logistics values are screening estimates."}
-                    </p>
-
-                    {(logisticsEstimate.warnings || []).map(
-                      (warning) => (
-                        <p
-                          key={warning}
-                          style={{ marginTop: "8px" }}
-                        >
-                          ⚠️ {warning}
-                        </p>
-                      )
-                    )}
-
-                  </div>
-
-                </section>
-              )}
-
-              <div className="field-drawer-grid">
-
-                <div className="field-drawer-stat">
-                  <Ruler size={16} />
-                  <span>Area</span>
-                  <strong>
-                    {indicators?.area_hectares != null
-                      ? `${indicators.area_hectares} ha`
-                      : "N/A"}
-                  </strong>
-                </div>
-
-                <div className="field-drawer-stat">
-                  <Map size={16} />
-                  <span>Acres</span>
-                  <strong>
-                    {indicators?.area_acres != null
-                      ? `${indicators.area_acres} ac`
-                      : "N/A"}
-                  </strong>
-                </div>
-
-                <div className="field-drawer-stat">
-                  <TrendingDown size={16} />
-                  <span>NDVI trend</span>
-                  <strong>
-                    {formatLabel(indicators?.ndvi_trend)}
-                  </strong>
-                </div>
-
-                <div className="field-drawer-stat">
-                  <TrendingDown size={16} />
-                  <span>NBR trend</span>
-                  <strong>
-                    {formatLabel(indicators?.nbr_trend)}
-                  </strong>
-                </div>
-
-              </div>
-
-              <section className="field-drawer-section">
-                <div className="field-drawer-section-title">
-                  <Sprout size={17} />
-                  <h3>Crop Transition</h3>
-                </div>
-
-                <div className="transition-drawer-card">
-
-                  <div className="transition-drawer-row">
-                    <span>Peak date</span>
-                    <strong>
-                      {transition?.peak_date || "N/A"}
-                    </strong>
-                  </div>
-
-                  <div className="transition-drawer-row">
-                    <span>Peak NDVI</span>
-                    <strong>
-                      {formatValue(transition?.peak_ndvi)}
-                    </strong>
-                  </div>
-
-                  <div className="transition-drawer-row">
-                    <span>Candidate date</span>
-                    <strong>
-                      {transition?.candidate_date || "Not detected"}
-                    </strong>
-                  </div>
-
-                  <div className="transition-drawer-row">
-                    <span>NDVI decline</span>
-                    <strong>
-                      {formatValue(transition?.decline)}
-                    </strong>
-                  </div>
-
-                  <div className="transition-drawer-status">
-                    {transition?.status || "No transition detected"}
-                  </div>
-
-                  <p>
-                    Candidate transition dates are NDVI-based
-                    signals and are not validated harvest dates.
-                  </p>
-
-                </div>
-              </section>
-
-              <section className="field-drawer-section">
-
-                <div className="field-drawer-section-title">
-                  <CalendarDays size={17} />
-                  <h3>Latest Observation</h3>
-                </div>
-
-                <div className="latest-observation">
-
-                  <div>
-                    <span>Date</span>
-                    <strong>{latest.date || "N/A"}</strong>
-                  </div>
-
-                  <div>
-                    <span>NDVI</span>
-                    <strong>{formatValue(latest.ndvi)}</strong>
-                  </div>
-
-                  <div>
-                    <span>NBR</span>
-                    <strong>{formatValue(latest.nbr)}</strong>
-                  </div>
-
-                </div>
-
-              </section>
-
-              <section className="field-drawer-section">
-
-                <button
-                  type="button"
-                  className="timeline-toggle"
-                  onClick={() =>
-                    setShowTimeline((visible) => !visible)
-                  }
-                >
-                  <span>Sentinel-2 Timeline</span>
-
-                  {showTimeline ? (
-                    <ChevronUp size={18} />
-                  ) : (
-                    <ChevronDown size={18} />
-                  )}
-                </button>
-
-                {showTimeline && (
-                  <div className="timeline-list">
-
-                    {timeSeries.length > 0 ? (
-                      timeSeries.map((point, index) => (
-                        <div
-                          className="timeline-row"
-                          key={`${point.date}-${index}`}
-                        >
-                          <span>{point.date}</span>
-
-                          <span>
-                            NDVI {formatValue(point.ndvi)}
-                          </span>
-
-                          <span>
-                            NBR {formatValue(point.nbr)}
-                          </span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="timeline-empty">
-                        No time-series observations available.
-                      </p>
-                    )}
-
-                  </div>
-                )}
-
-              </section>
-            </>
-          )}
-
-          {!loading && !error && !fieldData && (
-            <div className="field-drawer-state">
-              <Satellite size={26} />
-
-              <strong>Select a field</strong>
-
-              <p>
-                Choose a field from the map or monitoring
-                table to view its satellite intelligence.
-              </p>
-            </div>
-          )}
-
-        </div>
-      </aside>
+              `,
+
+              iconSize: [
+                28,
+                28
+              ],
+
+              iconAnchor: [
+                14,
+                14
+              ]
+            });
+
+
+          return (
+            <Marker
+              key={`marker-${marker.fieldId}`}
+              position={
+                marker.center
+              }
+              icon={icon}
+              eventHandlers={{
+                click: (
+                  event
+                ) => {
+                  const map =
+                    event.target._map;
+
+                  map.setView(
+                    marker.center,
+                    17,
+                    {
+                      animate: true
+                    }
+                  );
+
+                  onFieldSelect(
+                    marker.fieldId
+                  );
+                }
+              }}
+            />
+          );
+        }
+      )}
     </>
   );
 }
 
-export default FieldDrawer;
+
+// =====================================================
+// FIELD MAP
+// =====================================================
+
+function FieldMap({
+  geojson,
+  onFieldSelect
+}) {
+  if (
+    !geojson ||
+    !geojson.features
+  ) {
+    return (
+      <div className="map-loading">
+        Loading field map...
+      </div>
+    );
+  }
+
+
+  // ===================================================
+  // FIELD INTERACTION
+  // ===================================================
+
+  const onEachField = (
+    feature,
+    layer
+  ) => {
+    const index =
+      geojson.features.indexOf(
+        feature
+      );
+
+    const fieldId =
+      getFieldId(
+        feature,
+        index
+      );
+
+    const category =
+      getCategory(
+        feature
+      );
+
+    const fieldStatus =
+      getFieldStatus(
+        feature
+      );
+
+    const candidateDate =
+      getCandidateDate(
+        feature
+      );
+
+    const ndviTrend =
+      getNdviTrend(
+        feature
+      );
+
+    const nbrTrend =
+      getNbrTrend(
+        feature
+      );
+
+    const transition =
+      isTransitionCandidate(
+        feature
+      );
+
+    const baseStyle =
+      getCategoryStyle(
+        category
+      );
+
+    const mapStyle =
+      getTransitionStyle(
+        baseStyle,
+        feature
+      );
+
+
+    // Initial polygon style
+    layer.setStyle(
+      mapStyle
+    );
+
+
+    // =================================================
+    // POPUP
+    // =================================================
+
+    layer.bindPopup(`
+      <div style="
+        min-width: 220px;
+        line-height: 1.55;
+      ">
+
+        <div style="
+          font-size: 16px;
+          font-weight: 700;
+          margin-bottom: 6px;
+        ">
+          Field ${fieldId}
+        </div>
+
+        <div>
+          Category:
+          <strong>
+            ${category}
+          </strong>
+        </div>
+
+        <div>
+          Field status:
+          <strong>
+            ${fieldStatus}
+          </strong>
+        </div>
+
+        <div>
+          NDVI trend:
+          <strong>
+            ${ndviTrend || "N/A"}
+          </strong>
+        </div>
+
+        <div>
+          NBR trend:
+          <strong>
+            ${nbrTrend || "N/A"}
+          </strong>
+        </div>
+
+        <div>
+          Candidate transition:
+          <strong>
+            ${candidateDate || "Not detected"}
+          </strong>
+        </div>
+
+        ${
+          transition
+            ? `
+              <div style="
+                margin-top: 8px;
+                padding: 6px 8px;
+                border-radius: 6px;
+                background: #fef3c7;
+                color: #92400e;
+                font-weight: 600;
+              ">
+                🟡 Crop-transition candidate
+              </div>
+            `
+            : ""
+        }
+
+        <div style="
+          margin-top: 8px;
+          color: #6b7280;
+          font-size: 12px;
+        ">
+          Click field to open satellite analysis.
+        </div>
+
+      </div>
+    `);
+
+
+    // =================================================
+    // MOUSE EVENTS
+    // =================================================
+
+    layer.on({
+
+      mouseover: (event) => {
+        event.target.setStyle({
+          color: "#111827",
+          weight: 4,
+          fillColor:
+            baseStyle.fillColor,
+          fillOpacity: 0.55
+        });
+
+        if (
+          !L.Browser.ie &&
+          !L.Browser.opera &&
+          !L.Browser.edge
+        ) {
+          event.target.bringToFront();
+        }
+      },
+
+
+      mouseout: (event) => {
+        event.target.setStyle(
+          mapStyle
+        );
+      },
+
+
+      click: (event) => {
+        const map =
+          event.target._map;
+
+        const bounds =
+          event.target.getBounds();
+
+        if (
+          bounds.isValid()
+        ) {
+          map.fitBounds(
+            bounds,
+            {
+              padding: [
+                50,
+                50
+              ],
+
+              maxZoom: 17,
+
+              animate: true
+            }
+          );
+        }
+
+        event.target.openPopup();
+
+        onFieldSelect(
+          fieldId
+        );
+      }
+
+    });
+  };
+
+
+  // ===================================================
+  // MAP
+  // ===================================================
+
+  return (
+    <MapContainer
+      center={[
+        30.0,
+        75.0
+      ]}
+
+      zoom={10}
+
+      minZoom={8}
+
+      maxZoom={18}
+
+      // We use our own controls
+      zoomControl={false}
+
+      // Mouse wheel
+      scrollWheelZoom={true}
+
+      // Double click
+      doubleClickZoom={true}
+
+      // Mouse dragging
+      dragging={true}
+
+      // Touch pinch
+      touchZoom={true}
+
+      // Shift + drag
+      boxZoom={true}
+
+      // Keyboard arrows / +/- keys
+      keyboard={true}
+
+      // Smoother zoom
+      zoomSnap={0.5}
+
+      zoomDelta={1}
+
+      wheelPxPerZoomLevel={100}
+
+      zoomAnimation={true}
+
+      markerZoomAnimation={true}
+
+      className="field-map"
+    >
+
+      {/* ==============================================
+          BASE MAP
+      ============================================== */}
+
+      <TileLayer
+        attribution="&copy; OpenStreetMap contributors"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+
+
+      {/* ==============================================
+          FIELD POLYGONS
+      ============================================== */}
+
+      <GeoJSON
+        data={geojson}
+        onEachFeature={
+          onEachField
+        }
+      />
+
+
+      {/* ==============================================
+          FIELD NUMBER MARKERS
+      ============================================== */}
+
+      <FieldMarkers
+        geojson={geojson}
+        onFieldSelect={
+          onFieldSelect
+        }
+      />
+
+
+      {/* ==============================================
+          MAP UTILITIES
+      ============================================== */}
+
+      <MapSizeFix />
+
+      <FitBounds
+        geojson={geojson}
+      />
+
+      <MapControls
+        geojson={geojson}
+      />
+
+      <ZoomSlider />
+
+      <MapScale />
+
+    </MapContainer>
+  );
+}
+
+
+export default FieldMap;
