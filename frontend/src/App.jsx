@@ -19,6 +19,8 @@ import {
   Satellite,
   ShieldCheck,
   Sparkles,
+  Moon,
+  Sun,
   Target,
   TrendingDown,
   TrendingUp,
@@ -320,6 +322,27 @@ function App() {
     useState("");
   const [categoryFilter, setCategoryFilter] =
     useState("all");
+
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem("parali-theme") === "dark";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const theme = darkMode ? "dark" : "light";
+
+    try {
+      localStorage.setItem("parali-theme", theme);
+    } catch {
+      // Theme persistence is optional; the UI still works without storage.
+    }
+
+    document.documentElement.setAttribute("data-theme", theme);
+    document.body.setAttribute("data-theme", theme);
+  }, [darkMode]);
 
   useEffect(() => {
     const loadFields = async () => {
@@ -747,7 +770,7 @@ function App() {
 
 
   return (
-    <div className="parali-app">
+    <div className={`parali-app${darkMode ? " dark-mode" : ""}`}>
       <header className="parali-header">
         <div className="parali-brand">
           <div className="parali-logo">
@@ -807,9 +830,34 @@ function App() {
           </button>
         </nav>
 
-        <div className="parali-live-status">
-          <span className="live-dot" />
-          API LINKED
+        <div className="parali-header-actions">
+          <button
+            type="button"
+            className="theme-toggle"
+            aria-label={
+              darkMode
+                ? "Switch to light mode"
+                : "Switch to dark mode"
+            }
+            title={
+              darkMode
+                ? "Switch to light mode"
+                : "Switch to dark mode"
+            }
+            onClick={() => setDarkMode((current) => !current)}
+          >
+            {darkMode ? (
+              <Sun size={15} strokeWidth={2.2} />
+            ) : (
+              <Moon size={15} strokeWidth={2.2} />
+            )}
+            <span>{darkMode ? "LIGHT" : "DARK"}</span>
+          </button>
+
+          <div className="parali-live-status">
+            <span className="live-dot" />
+            API LINKED
+          </div>
         </div>
       </header>
 

@@ -2,16 +2,41 @@
 
 :root {
   font-family: "DM Sans", Inter, ui-sans-serif, system-ui, sans-serif;
-  color: #102119;
-  background: #f4f7f2;
+
+  /* Light theme */
+  --page-bg: #f4f7f2;
+  --page-text: #102119;
+
+  color: var(--page-text);
+  background: var(--page-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/*
+  Dark mode is activated by adding `dark-mode` to `.parali-app`
+  (for example: <div className="parali-app dark-mode">).
+*/
+.parali-app.dark-mode {
+  --page-bg: #07100c;
+  --page-text: #edf5ef;
+}
+
+/* Keep the global document background synchronized with the app theme. */
+html,
+body {
+  background: var(--page-bg);
+  color: var(--page-text);
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
+}
+
 body {
   margin: 0;
+  min-width: 320px;
 }
 
 button,
