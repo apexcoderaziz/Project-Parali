@@ -212,20 +212,6 @@ function FieldAreaDeclineChart({ data }) {
 
 function App() {
 
-  // =====================================================
-  // BURN DETECTION STATE
-  // =====================================================
-
-  const [rgbFile, setRgbFile] = useState(null);
-
-  const [swirFile, setSwirFile] = useState(null);
-
-  const [result, setResult] = useState(null);
-
-  const [loading, setLoading] = useState(false);
-
-  const [error, setError] = useState("");
-
 
   // =====================================================
   // SATELLITE FIELD ANALYSIS STATE
@@ -346,83 +332,6 @@ function App() {
     loadFields();
 
   }, []);
-
-
-  // =====================================================
-  // BURN PREDICTION
-  // =====================================================
-
-  const handlePredict = async () => {
-
-    if (!rgbFile || !swirFile) {
-
-      setError(
-        "Please select both RGB and SWIR images."
-      );
-
-      return;
-    }
-
-
-    setLoading(true);
-
-    setError("");
-
-    setResult(null);
-
-
-    const formData = new FormData();
-
-    formData.append(
-      "rgb_image",
-      rgbFile
-    );
-
-    formData.append(
-      "swir_image",
-      swirFile
-    );
-
-
-    try {
-
-      const response = await fetch(
-        `${API_URL}/predict`,
-        {
-          method: "POST",
-          body: formData
-        }
-      );
-
-
-      const data = await response.json();
-
-
-      if (!response.ok) {
-
-        throw new Error(
-          data.detail ||
-          "Prediction failed"
-        );
-
-      }
-
-
-      setResult(data);
-
-    } catch (err) {
-
-      setError(
-        err.message
-      );
-
-    } finally {
-
-      setLoading(false);
-
-    }
-
-  };
 
 
   // =====================================================
@@ -1730,18 +1639,12 @@ function App() {
         />
 
         {/* =================================================
-            BURN DETECTION
+            LIVE BURN ANALYSIS
         ================================================= */}
 
         <BurnDetector
-          rgbFile={rgbFile}
-          swirFile={swirFile}
-          setRgbFile={setRgbFile}
-          setSwirFile={setSwirFile}
-          result={result}
-          loading={loading}
-          error={error}
-          onPredict={handlePredict}
+          fieldId={fieldId}
+          fieldData={fieldData}
         />
 
         {/* =================================================

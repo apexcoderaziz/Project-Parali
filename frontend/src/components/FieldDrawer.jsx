@@ -50,7 +50,10 @@ function FieldDrawer({
   // Keep the historical field-analysis payload separate so the drawer
   // always displays the current live assessment when available.
   const harvestPrediction = liveHarvestPrediction;
-  const timeSeries = fieldData?.time_series || [];
+  const timeSeries =
+    harvestPrediction?.time_series ||
+    fieldData?.time_series ||
+    [];
   const category = fieldData?.field_category || "Unknown";
 
   const formatValue = (value, digits = 4) => {
@@ -73,7 +76,32 @@ function FieldDrawer({
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   };
 
-  const latest = fieldData?.latest_observation || {};
+  const latest =
+    harvestPrediction?.latest_observation ||
+    fieldData?.latest_observation ||
+    {};
+
+  const liveTimeSeries = harvestPrediction?.time_series || [];
+
+  const recentLiveObservations = liveTimeSeries.slice(-8);
+
+  const livePeakObservation = recentLiveObservations.reduce(
+    (peak, point) => {
+      const pointNdvi = Number(point?.ndvi);
+
+      if (!Number.isFinite(pointNdvi)) {
+        return peak;
+      }
+
+      if (!peak || pointNdvi > Number(peak.ndvi)) {
+        return point;
+      }
+
+      return peak;
+    },
+    null
+  );
+
   const cluster = clusterEstimate?.collection_cluster || null;
   const aggregation = clusterEstimate?.aggregation_effect || null;
 
@@ -840,46 +868,67 @@ function FieldDrawer({
               <section className="field-drawer-section">
                 <div className="field-drawer-section-title">
                   <Sprout size={17} />
-                  <h3>Crop Transition</h3>
+                  <h3>Live Crop Transition</h3>
                 </div>
 
                 <div className="transition-drawer-card">
 
                   <div className="transition-drawer-row">
-                    <span>Peak date</span>
+                    <span>Recent peak date</span>
                     <strong>
-                      {transition?.peak_date || "N/A"}
+                      {livePeakObservation?.date || "N/A"}
                     </strong>
                   </div>
 
                   <div className="transition-drawer-row">
-                    <span>Peak NDVI</span>
+                    <span>Recent peak NDVI</span>
                     <strong>
-                      {formatValue(transition?.peak_ndvi)}
+                      {formatValue(livePeakObservation?.ndvi)}
                     </strong>
                   </div>
 
                   <div className="transition-drawer-row">
-                    <span>Candidate date</span>
+                    <span>Latest observation</span>
                     <strong>
-                      {transition?.candidate_date || "Not detected"}
+                      {latest?.date || "N/A"}
                     </strong>
                   </div>
 
                   <div className="transition-drawer-row">
-                    <span>NDVI decline</span>
+                    <span>NDVI decline from recent peak</span>
                     <strong>
-                      {formatValue(transition?.decline)}
+                      {harvestPrediction?.signals
+                        ?.ndvi_decline_from_peak != null
+                        ? formatValue(
+                            harvestPrediction.signals.ndvi_decline_from_peak
+                          )
+                        : "N/A"}
+                    </strong>
+                  </div>
+
+                  <div className="transition-drawer-row">
+                    <span>NBR decline from recent peak</span>
+                    <strong>
+                      {harvestPrediction?.signals
+                        ?.nbr_decline_from_peak != null
+                        ? formatValue(
+                            harvestPrediction.signals.nbr_decline_from_peak
+                          )
+                        : "N/A"}
                     </strong>
                   </div>
 
                   <div className="transition-drawer-status">
-                    {transition?.status || "No transition detected"}
+                    {harvestPrediction?.status_label ||
+                      transition?.status ||
+                      "No live transition signal"}
                   </div>
 
                   <p>
-                    Candidate transition dates are NDVI-based
-                    signals and are not validated harvest dates.
+                    Values above are calculated from the latest usable
+                    Sentinel-2 observations. The recent peak uses the latest
+                    eight available live observations and is a crop-transition
+                    signal, not a validated harvest date.
                   </p>
 
                 </div>

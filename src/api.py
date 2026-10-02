@@ -38,6 +38,12 @@ try:
 except ImportError:
     from harvest_prediction import predict_harvest
 
+# Live Sentinel-2 burn-analysis engine.
+try:
+    from .live_burn_analysis import analyze_live_burn
+except ImportError:
+    from live_burn_analysis import analyze_live_burn
+
 
 # =========================================================
 # PATHS
@@ -779,7 +785,40 @@ def model_info():
             "task": "Field-level crop-transition / harvest signal assessment",
             "status": "transparent Sentinel-2 NDVI/NBR signal assessment; not a calibrated probability",
         },
+        "live_burn_analysis": {
+            "model": "Sentinel-2 spectral burn-signal MVP",
+            "task": "Field-level live burn / post-burn spectral assessment",
+            "status": "transparent Sentinel-2 spectral-signal assessment; not a calibrated probability",
+            "inputs": ["B4 Red", "B8 NIR", "B11 SWIR1", "B12 SWIR2", "NDVI", "NBR"],
+        },
     }
+
+
+# =========================================================
+# LIVE BURN ANALYSIS ENDPOINT
+# =========================================================
+
+@app.get("/live-burn-analysis/{field_id}")
+def live_burn_analysis(field_id: str):
+    """
+    Analyze the selected field using the latest usable Sentinel-2 imagery.
+
+    This route is separate from /predict. The existing /predict endpoint
+    remains the manual RGB + SWIR CNN workflow. This route uses live
+    Sentinel-2 spectral observations and transparent burn-signal rules.
+    """
+    try:
+        return analyze_live_burn(field_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # =========================================================

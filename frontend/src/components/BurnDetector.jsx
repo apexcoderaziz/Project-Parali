@@ -1,91 +1,51 @@
+import React, {
+  useEffect,
+  useState
+} from "react";
+
 import {
   CheckCircle2,
-  FileImage,
   Flame,
-  ImagePlus,
   LoaderCircle,
-  Sparkles,
-  Upload,
-  X
+  Sparkles
 } from "lucide-react";
 
-function ImageDropZone({
-  title,
-  description,
-  file,
-  onChange,
-  onClear
-}) {
-  return (
-    <div className="burn-upload-zone">
-      <div className="burn-upload-icon">
-        <FileImage size={21} />
-      </div>
+const API_URL = "http://127.0.0.1:8000";
 
-      <div className="burn-upload-content">
-        <div className="burn-upload-title">
-          {title}
-        </div>
-
-        <div className="burn-upload-description">
-          {description}
-        </div>
-
-        {file ? (
-          <div className="burn-selected-file">
-            <span title={file.name}>
-              {file.name}
-            </span>
-
-            <button
-              type="button"
-              onClick={onClear}
-              aria-label={`Remove ${title}`}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ) : (
-          <label className="burn-upload-button">
-            <Upload size={14} />
-            Choose image
-
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) =>
-                onChange(
-                  event.target.files?.[0] || null
-                )
-              }
-            />
-          </label>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PredictionResult({ result }) {
+function BurnResult({ result }) {
   if (!result) {
     return null;
   }
 
-  const isBurn =
-    String(result.prediction || "").toLowerCase() ===
-    "burn";
+  const likelihood =
+    String(
+      result.burn_likelihood ??
+      result.status ??
+      ""
+    ).toLowerCase();
+
+  const isBurnSignal =
+    likelihood.includes("high") ||
+    likelihood.includes("strong") ||
+    likelihood.includes("burn");
+
+  const latest =
+    result.latest_observation || {};
+
+  const signals =
+    result.signals || {};
 
   return (
     <div
       className={
-        isBurn
+        isBurnSignal
           ? "burn-result burn-result-danger"
           : "burn-result burn-result-safe"
       }
     >
       <div className="burn-result-header">
         <div className="burn-result-icon">
-          {isBurn ? (
+          {isBurnSignal ? (
             <Flame size={23} />
           ) : (
             <CheckCircle2 size={23} />
@@ -93,59 +53,124 @@ function PredictionResult({ result }) {
         </div>
 
         <div>
-          <span>AI classification</span>
+          <span>Live Sentinel-2 assessment</span>
 
           <h3>
-            {result.prediction || "Unknown"}
+            {result.status_label ||
+              result.burn_likelihood ||
+              result.status ||
+              "Assessment available"}
           </h3>
         </div>
       </div>
 
       <div className="burn-result-metrics">
         <div>
-          <span>Confidence</span>
+          <span>Signal strength</span>
           <strong>
-            {result.confidence ?? "N/A"}%
+            {result.signal_strength != null
+              ? `${result.signal_strength}`
+              : "N/A"}
           </strong>
         </div>
 
         <div>
-          <span>No Burn</span>
+          <span>Latest NDVI</span>
           <strong>
-            {result.no_burn_probability ?? "N/A"}%
+            {latest.ndvi ?? "N/A"}
           </strong>
         </div>
 
         <div>
-          <span>Burn</span>
+          <span>Latest NBR</span>
           <strong>
-            {result.burn_probability ?? "N/A"}%
+            {latest.nbr ?? "N/A"}
           </strong>
         </div>
       </div>
 
       <div className="burn-result-note">
-        This result applies to the uploaded RGB/SWIR
-        image pair. It should not be interpreted as a
-        field-wide conclusion unless the pair represents
-        that field and scene.
+        {result.validation_note ||
+          "This is a live Sentinel-2 spectral/temporal burn indicator, not a calibrated probability or confirmed burn event."}
       </div>
     </div>
   );
 }
 
 function BurnDetector({
-  rgbFile,
-  swirFile,
-  setRgbFile,
-  setSwirFile,
-  result,
-  loading = false,
-  error = "",
-  onPredict
+  fieldId,
+  fieldData
 }) {
-  const canAnalyze =
-    Boolean(rgbFile && swirFile && !loading);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldRefreshKey, setFieldRefreshKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const normalizedFieldId =
+      String(fieldId || "").trim();
+
+    if (!normalizedFieldId) {
+      setResult(null);
+      setError("");
+      return undefined;
+    }
+
+    const loadBurnAnalysis = async () => {
+      setLoading(true);
+      setError("");
+      setResult(null);
+
+      try {
+        const response = await fetch(
+          `${API_URL}/live-burn-analysis/${encodeURIComponent(
+            normalizedFieldId
+          )}`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.detail ||
+            "Live burn analysis failed"
+          );
+        }
+
+        if (!cancelled) {
+          setResult(data);
+        }
+      } catch (err) {
+        console.error(
+          "Live burn analysis error:",
+          err
+        );
+
+        if (!cancelled) {
+          setResult(null);
+          setError(
+            err.message ||
+            "Live burn analysis failed"
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadBurnAnalysis();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fieldId, fieldRefreshKey]);
+
+  const normalizedFieldId =
+    String(fieldId || "").trim();
 
   return (
     <div className="burn-detector">
@@ -157,7 +182,7 @@ function BurnDetector({
 
         <div>
           <div className="burn-detector-eyebrow">
-            DUAL-MODAL AI ANALYSIS
+            LIVE SATELLITE ANALYSIS
           </div>
 
           <h3>
@@ -165,8 +190,9 @@ function BurnDetector({
           </h3>
 
           <p>
-            Analyze a matching RGB and SWIR satellite
-            image pair using the trained Dual CNN.
+            Analyze the selected field using current
+            Sentinel-2 spectral and temporal signals.
+            No RGB or SWIR image upload is required.
           </p>
         </div>
       </div>
@@ -176,34 +202,15 @@ function BurnDetector({
 
         <div>
           <strong>
-            Use a matching image pair
+            Live Sentinel-2 monitoring
           </strong>
 
           <span>
-            RGB and SWIR images should represent the
-            same scene, field, and date.
+            {normalizedFieldId
+              ? `Field ${normalizedFieldId} is being assessed directly from satellite observations.`
+              : "Select a field to start live satellite burn analysis."}
           </span>
         </div>
-      </div>
-
-      <div className="burn-upload-grid">
-
-        <ImageDropZone
-          title="RGB image"
-          description="Visible-spectrum satellite image"
-          file={rgbFile}
-          onChange={setRgbFile}
-          onClear={() => setRgbFile(null)}
-        />
-
-        <ImageDropZone
-          title="SWIR image"
-          description="SWIR representation used by the model"
-          file={swirFile}
-          onChange={setSwirFile}
-          onClear={() => setSwirFile(null)}
-        />
-
       </div>
 
       <div className="burn-action-row">
@@ -211,8 +218,10 @@ function BurnDetector({
         <button
           type="button"
           className="burn-analyze-button"
-          disabled={!canAnalyze}
-          onClick={onPredict}
+          disabled={!normalizedFieldId || loading}
+          onClick={() => {
+            setFieldRefreshKey((value) => value + 1);
+          }}
         >
           {loading ? (
             <>
@@ -220,24 +229,28 @@ function BurnDetector({
                 size={17}
                 className="burn-spinner"
               />
-              Analyzing pair...
+              Analyzing satellite...
             </>
           ) : (
             <>
-              <ImagePlus size={17} />
-              Analyze burn risk
+              <Flame size={17} />
+              Refresh burn analysis
             </>
           )}
         </button>
 
-        {!rgbFile || !swirFile ? (
+        {!normalizedFieldId ? (
           <span className="burn-action-hint">
-            Select both images to continue
+            Select a field to continue
+          </span>
+        ) : loading ? (
+          <span className="burn-action-hint">
+            Examining Sentinel-2 observations
           </span>
         ) : (
           <span className="burn-action-ready">
             <CheckCircle2 size={14} />
-            Image pair ready
+            Live satellite assessment ready
           </span>
         )}
 
@@ -249,7 +262,7 @@ function BurnDetector({
         </div>
       )}
 
-      <PredictionResult result={result} />
+      <BurnResult result={result} />
 
     </div>
   );
