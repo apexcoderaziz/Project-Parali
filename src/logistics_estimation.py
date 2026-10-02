@@ -1,223 +1,79 @@
 """Logistics and transport screening for Project Parali.
 
-This module estimates transport requirements between a field and its nearest
-registered biomass facility.
+This module estimates transport requirements between a logical field and its
+nearest registered biomass facilities.
+
+Architecture:
+    logical field -> field_context -> residue estimate -> biomass opportunity
+    -> logistics screening
 
 Important:
-- Facility distance comes from the biomass opportunity module.
-- Road distance is an explicit screening assumption derived from straight-line
-  distance; it is NOT a route returned by a mapping/routing service.
-- Transport cost is an assumption-based estimate, not an actual transporter
-  quotation.
+- Facility distance comes from biomass_opportunity.
+- Road distance is a configurable screening assumption derived from
+  straight-line distance; it is NOT a live routing result.
+- Transport cost is an assumption-based estimate, not a transporter quote.
+- For a multi-source logical field such as 34 (2020_34 + 2021_34), transport
+  is calculated per source-year field and then aggregated, so the total cost
+  is not incorrectly based on one minimum distance applied to every tonne.
 """
 
-import math
-from typing import Any, Dict
+from __future__ import annotations
 
-from .biomass_opportunity import match_facilities
-from .field_grouping import group_summary, resolve_field_ids
+import math
+from typing import Any, Dict, List
+
+try:
+    from .biomass_opportunity import match_facilities
+    from .field_context import resolve_field_context
+    from .residue_estimation import estimate_residue
+except ImportError:
+    from biomass_opportunity import match_facilities
+    from field_context import resolve_field_context
+    from residue_estimation import estimate_residue
 
 
 # ---------------------------------------------------------------------------
 # Transparent logistics assumptions
 # ---------------------------------------------------------------------------
 
-# Road routes are usually longer than straight-line distance. This is only a
-# screening factor until an actual routing API is integrated.
+DEFAULT_SEARCH_RADIUS_KM = 50.0
 DEFAULT_ROAD_DISTANCE_FACTOR = 1.30
-
-# Assumption for screening transport economics.
-# This is deliberately configurable and must not be presented as a market quote.
 DEFAULT_TRANSPORT_RATE_PER_TONNE_KM = 4.50
-
-# A small field load should be flagged because a real truck may have a minimum
-# economical load / trip cost that this simple tonne-km model does not capture.
 SMALL_LOAD_THRESHOLD_TONNES = 2.0
 
+# Configurable biomass sale-price assumption. This is not a live market quote.
+DEFAULT_BIOMASS_SALE_PRICE_INR_PER_TONNE = 2500.0
 
-def _number(value: Any) -> float:
+
+def _number(value: Any, default: float = 0.0) -> float:
     try:
         number = float(value)
         if math.isfinite(number):
             return number
     except (TypeError, ValueError):
         pass
-    return 0.0
+    return default
 
 
-def estimate_logistics(
-    field_id: str,
+def _safe_round(value: Any, digits: int = 2) -> float:
+    return round(_number(value), digits)
+
+
+def _source_logistics(
+    source_field_id: str,
     recoverable_biomass_tonnes: float,
-    search_radius_km: float = 50.0,
-    road_distance_factor: float = DEFAULT_ROAD_DISTANCE_FACTOR,
-    transport_rate_per_tonne_km: float = DEFAULT_TRANSPORT_RATE_PER_TONNE_KM,
+    search_radius_km: float,
+    road_distance_factor: float,
+    transport_rate_per_tonne_km: float,
+    biomass_sale_price_inr_per_tonne: float,
 ) -> Dict[str, Any]:
-    """Return a transparent logistics screening estimate for one field."""
-
-    if road_distance_factor < 1.0:
-        raise ValueError("road_distance_factor must be >= 1.0")
-
-    if transport_rate_per_tonne_km < 0:
-        raise ValueError("transport_rate_per_tonne_km must be >= 0")
+    """Calculate logistics for one physical source-year field."""
 
     recoverable = max(0.0, _number(recoverable_biomass_tonnes))
-
-    target_id = str(field_id).strip()
-    source_field_ids = resolve_field_ids(target_id)
-
-    # For a logical field number such as "34", calculate transport for each
-    # source-year field separately and then aggregate the planning totals.
-    # This avoids inventing a route from an artificial midpoint between
-    # historical geometries.
-    if target_id not in source_field_ids and len(source_field_ids) > 1:
-        try:
-            from .residue_estimation import estimate_residue
-        except ImportError:
-            from residue_estimation import estimate_residue
-
-        member_logistics = []
-        total_recoverable = 0.0
-        total_cost = 0.0
-
-        for source_id in source_field_ids:
-            member_residue = estimate_residue(source_id)
-            member_recoverable = float(
-                member_residue.get("recoverable_biomass_tonnes", 0.0)
-            )
-
-            member_result = estimate_logistics(
-                field_id=source_id,
-                recoverable_biomass_tonnes=member_recoverable,
-                search_radius_km=search_radius_km,
-                road_distance_factor=road_distance_factor,
-                transport_rate_per_tonne_km=transport_rate_per_tonne_km,
-            )
-
-            member_logistics.append(member_result)
-            total_recoverable += member_recoverable
-            total_cost += _number(
-                (member_result.get("transport") or {}).get(
-                    "estimated_transport_cost_inr"
-                )
-            )
-
-        available_member_facilities = [
-            member["nearest_facility"]
-            for member in member_logistics
-            if member.get("nearest_facility")
-        ]
-        nearest = (
-            min(
-                available_member_facilities,
-                key=lambda item: item.get("straight_line_distance_km", float("inf")),
-            )
-            if available_member_facilities
-            else None
-        )
-
-        shortest_road_distance = (
-            min(
-                _number(
-                    (member.get("transport") or {}).get(
-                        "estimated_road_distance_km"
-                    )
-                )
-                for member in member_logistics
-                if member.get("transport")
-            )
-            if any(member.get("transport") for member in member_logistics)
-            else 0.0
-        )
-
-        cost_per_tonne = (
-            total_cost / total_recoverable
-            if total_recoverable > 0
-            else 0.0
-        )
-
-        any_outside = any(
-            member.get("logistics_status")
-            == "nearest_facility_outside_screening_radius"
-            for member in member_logistics
-        )
-
-        if total_recoverable <= 0:
-            logistics_status = "no_recoverable_biomass"
-        elif any_outside:
-            logistics_status = "multi_source_group_with_member_outside_radius"
-        else:
-            logistics_status = "multi_source_group_aggregated"
-
-        warnings = []
-        for member in member_logistics:
-            for warning in member.get("warnings", []):
-                if warning not in warnings:
-                    warnings.append(warning)
-
-        if len(source_field_ids) > 1:
-            warnings.append(
-                "This logical field combines separate source-year field records. "
-                "Transport cost is aggregated from member fields rather than from "
-                "a single artificial centroid route."
-            )
-
-        summary = group_summary(target_id)
-
-        return {
-            "success": True,
-            "field_id": target_id,
-            "prediction_type": "assumption-based logistics screening",
-            "logistics_status": logistics_status,
-            "recoverable_biomass_tonnes": round(total_recoverable, 3),
-            "nearest_facility": nearest,
-            "transport": (
-                {
-                    "estimated_road_distance_km": round(shortest_road_distance, 2),
-                    "road_distance_factor": road_distance_factor,
-                    "transport_rate_per_tonne_km": transport_rate_per_tonne_km,
-                    "estimated_transport_cost_inr": round(total_cost, 2),
-                    "estimated_cost_per_tonne_inr": round(cost_per_tonne, 2),
-                }
-                if any(member.get("transport") for member in member_logistics)
-                else None
-            ),
-            "warnings": warnings,
-            "methodology": (
-                "Each source-year field is matched to its nearest registered facility and "
-                "transport is estimated independently. Total biomass and transport cost "
-                "are then aggregated for the logical field group."
-            ),
-            "assumptions": {
-                "road_distance_factor": road_distance_factor,
-                "transport_rate_per_tonne_km_inr": transport_rate_per_tonne_km,
-                "small_load_threshold_tonnes": SMALL_LOAD_THRESHOLD_TONNES,
-            },
-            "validation_note": (
-                "This is a logistics screening estimate. Road distance is not obtained "
-                "from a routing service, and the transport rate is a configurable assumption."
-            ),
-            "facility_matching": {
-                "search_radius_km": search_radius_km,
-                "member_count": len(source_field_ids),
-                "member_logistics": member_logistics,
-            },
-            "source_field_ids": summary["source_field_ids"],
-            "source_field_count": summary["source_field_count"],
-            "straight_line_distance_km": (
-                nearest.get("straight_line_distance_km") if nearest else None
-            ),
-            "estimated_road_distance_km": round(shortest_road_distance, 2),
-            "estimated_transport_cost_inr": round(total_cost, 2),
-            "cost_per_tonne_inr": round(cost_per_tonne, 2),
-            "search_radius_km": search_radius_km,
-            "methodology_note": (
-                "For multi-source groups, transport cost is the sum of member-field "
-                "screening costs; the displayed distance is the shortest member-to-nearest-facility distance."
-            ),
-        }
+    sale_price = max(0.0, _number(biomass_sale_price_inr_per_tonne))
 
     opportunity = match_facilities(
-        field_id=field_id,
+        field_id=source_field_id,
         recoverable_biomass_tonnes=recoverable,
         search_radius_km=search_radius_km,
     )
@@ -225,25 +81,31 @@ def estimate_logistics(
     nearest = opportunity.get("nearest_facility")
 
     if not nearest:
+        gross_revenue = recoverable * sale_price
+
         return {
-            "success": True,
-            "field_id": str(field_id).strip(),
-            "prediction_type": "assumption-based logistics screening",
-            "logistics_status": "no_registered_facility",
+            "field_id": str(source_field_id).strip(),
             "recoverable_biomass_tonnes": round(recoverable, 3),
+            "logistics_status": "no_registered_facility",
             "nearest_facility": None,
             "transport": None,
-            "methodology": (
-                "No registered biomass facility is available for distance "
-                "calculation. Add a sourced facility to the registry."
-            ),
-            "validation_note": (
-                "This module does not provide actual road routing or a "
-                "transporter quotation."
-            ),
+            "economics": {
+                "biomass_sale_price_inr_per_tonne": round(sale_price, 2),
+                "gross_revenue_inr": round(gross_revenue, 2),
+                "transport_cost_inr": None,
+                "net_profit_inr": None,
+                "net_profit_per_tonne_inr": None,
+                "profit_margin_percent": None,
+                "profit_status": "not_computable_without_facility",
+                "profit_definition": "gross biomass sale revenue minus estimated transport cost",
+            },
+            "warnings": [
+                "No registered biomass facility is available for transport-cost calculation; estimated net profit is therefore not computable."
+            ],
+            "opportunity": opportunity,
         }
 
-    straight_line_km = _number(nearest.get("distance_km"))
+    straight_line_km = max(0.0, _number(nearest.get("distance_km")))
     estimated_road_km = straight_line_km * road_distance_factor
 
     estimated_transport_cost = (
@@ -258,44 +120,43 @@ def estimate_logistics(
         else 0.0
     )
 
-    within_radius = (
-        nearest.get("screening_status") == "within_search_radius"
+    gross_revenue = recoverable * sale_price
+    net_profit = gross_revenue - estimated_transport_cost
+    profit_per_tonne = (
+        net_profit / recoverable
+        if recoverable > 0
+        else 0.0
     )
+
+    screening_status = nearest.get("screening_status")
 
     if recoverable <= 0:
         logistics_status = "no_recoverable_biomass"
-    elif not within_radius:
+    elif screening_status != "within_search_radius":
         logistics_status = "nearest_facility_outside_screening_radius"
     elif straight_line_km <= 10:
         logistics_status = "short_distance"
     elif straight_line_km <= 25:
         logistics_status = "local_logistics"
-    elif straight_line_km <= 50:
-        logistics_status = "regional_logistics"
     else:
-        logistics_status = "long_distance_screening"
+        logistics_status = "regional_logistics"
 
-    warnings = []
+    warnings: List[str] = []
 
     if recoverable < SMALL_LOAD_THRESHOLD_TONNES:
         warnings.append(
-            "Field biomass is below the small-load threshold; a real truck "
-            "may have a minimum trip/load cost that is not captured by this "
-            "tonne-kilometre estimate."
+            "Field biomass is below the small-load threshold; a real truck may have a minimum trip/load cost not captured by this tonne-kilometre estimate."
         )
 
     if nearest.get("coordinate_quality") != "exact plant-gate location":
         warnings.append(
-            "Facility coordinates may be approximate, so the distance is a "
-            "screening estimate rather than an exact plant-gate route."
+            "Facility coordinates may be approximate, so the distance is a screening estimate rather than an exact plant-gate route."
         )
 
     return {
-        "success": True,
-        "field_id": str(field_id).strip(),
-        "prediction_type": "assumption-based logistics screening",
-        "logistics_status": logistics_status,
+        "field_id": str(source_field_id).strip(),
         "recoverable_biomass_tonnes": round(recoverable, 3),
+        "logistics_status": logistics_status,
         "nearest_facility": {
             "facility_id": nearest.get("facility_id"),
             "name": nearest.get("name"),
@@ -310,54 +171,441 @@ def estimate_logistics(
             "estimated_road_distance_km": round(estimated_road_km, 2),
             "road_distance_factor": road_distance_factor,
             "transport_rate_per_tonne_km": transport_rate_per_tonne_km,
-            "estimated_transport_cost_inr": round(
-                estimated_transport_cost,
-                2,
-            ),
-            "estimated_cost_per_tonne_inr": round(
-                cost_per_tonne,
+            "estimated_transport_cost_inr": round(estimated_transport_cost, 2),
+            "estimated_cost_per_tonne_inr": round(cost_per_tonne, 2),
+        },
+        "economics": {
+            "biomass_sale_price_inr_per_tonne": round(sale_price, 2),
+            "gross_revenue_inr": round(gross_revenue, 2),
+            "transport_cost_inr": round(estimated_transport_cost, 2),
+            "net_profit_inr": round(net_profit, 2),
+            "net_profit_per_tonne_inr": round(profit_per_tonne, 2),
+            "profit_margin_percent": round(
+                (net_profit / gross_revenue * 100)
+                if gross_revenue > 0
+                else 0.0,
                 2,
             ),
         },
         "warnings": warnings,
+        "opportunity": opportunity,
+    }
+
+
+def _aggregate_logical_logistics(
+    field_id: str,
+    context: Dict[str, Any],
+    search_radius_km: float,
+    road_distance_factor: float,
+    transport_rate_per_tonne_km: float,
+    biomass_sale_price_inr_per_tonne: float,
+) -> Dict[str, Any]:
+    """Aggregate transport and economics for all source-year members."""
+
+    source_field_ids = [
+        str(item)
+        for item in context.get("source_field_ids", [])
+    ]
+
+    source_results: List[Dict[str, Any]] = []
+    total_recoverable = 0.0
+    total_transport_cost = 0.0
+    total_gross_revenue = 0.0
+    weighted_road_distance = 0.0
+    weighted_straight_distance = 0.0
+    distance_weight = 0.0
+    warnings: List[str] = []
+    all_sources_have_facility = True
+
+    for source_id in source_field_ids:
+        try:
+            residue = estimate_residue(source_id)
+            recoverable = _number(
+                residue.get("recoverable_biomass_tonnes")
+            )
+        except Exception:
+            recoverable = 0.0
+
+        result = _source_logistics(
+            source_field_id=source_id,
+            recoverable_biomass_tonnes=recoverable,
+            search_radius_km=search_radius_km,
+            road_distance_factor=road_distance_factor,
+            transport_rate_per_tonne_km=transport_rate_per_tonne_km,
+            biomass_sale_price_inr_per_tonne=biomass_sale_price_inr_per_tonne,
+        )
+
+        source_results.append(result)
+        total_recoverable += recoverable
+
+        if not result.get("nearest_facility"):
+            all_sources_have_facility = False
+
+        transport = result.get("transport") or {}
+        cost = _number(transport.get("estimated_transport_cost_inr"))
+        total_transport_cost += cost
+
+        economics = result.get("economics") or {}
+        total_gross_revenue += _number(economics.get("gross_revenue_inr"))
+
+        nearest = result.get("nearest_facility")
+        if nearest and recoverable > 0:
+            straight = _number(nearest.get("straight_line_distance_km"))
+            road = _number(transport.get("estimated_road_distance_km"))
+            weighted_straight_distance += straight * recoverable
+            weighted_road_distance += road * recoverable
+            distance_weight += recoverable
+
+        warnings.extend(result.get("warnings") or [])
+
+    nearest_source_result = None
+    for result in source_results:
+        if not result.get("nearest_facility"):
+            continue
+        if nearest_source_result is None:
+            nearest_source_result = result
+            continue
+        current_distance = _number(
+            result["nearest_facility"].get("straight_line_distance_km")
+        )
+        selected_distance = _number(
+            nearest_source_result["nearest_facility"].get(
+                "straight_line_distance_km"
+            )
+        )
+        if current_distance < selected_distance:
+            nearest_source_result = result
+
+    weighted_straight = (
+        weighted_straight_distance / distance_weight
+        if distance_weight > 0
+        else 0.0
+    )
+    weighted_road = (
+        weighted_road_distance / distance_weight
+        if distance_weight > 0
+        else 0.0
+    )
+
+    cost_per_tonne = (
+        total_transport_cost / total_recoverable
+        if total_recoverable > 0
+        else 0.0
+    )
+    total_net_profit = (
+        total_gross_revenue - total_transport_cost
+        if all_sources_have_facility
+        else None
+    )
+    net_profit_per_tonne = (
+        total_net_profit / total_recoverable
+        if total_net_profit is not None and total_recoverable > 0
+        else None
+    )
+    profit_margin_percent = (
+        total_net_profit / total_gross_revenue * 100
+        if total_net_profit is not None and total_gross_revenue > 0
+        else None
+    )
+
+    within_radius_count = sum(
+        1
+        for result in source_results
+        if (result.get("nearest_facility") or {}).get("screening_status")
+        == "within_search_radius"
+    )
+
+    if total_recoverable <= 0:
+        logistics_status = "no_recoverable_biomass"
+    elif not source_results or nearest_source_result is None:
+        logistics_status = "no_registered_facility"
+    elif within_radius_count == len(source_results):
+        if weighted_straight <= 10:
+            logistics_status = "short_distance"
+        elif weighted_straight <= 25:
+            logistics_status = "local_logistics"
+        elif weighted_straight <= 50:
+            logistics_status = "regional_logistics"
+        else:
+            logistics_status = "long_distance_screening"
+    elif within_radius_count > 0:
+        logistics_status = "mixed_facility_screening"
+    else:
+        logistics_status = "nearest_facility_outside_screening_radius"
+
+    nearest = (
+        nearest_source_result.get("nearest_facility")
+        if nearest_source_result
+        else None
+    )
+
+    # De-duplicate warnings while preserving their order.
+    warnings = list(dict.fromkeys(warnings))
+
+    return {
+        "success": True,
+        "field_id": str(field_id).strip(),
+        "prediction_type": "assumption-based logistics screening",
+        "logistics_status": logistics_status,
+        "recoverable_biomass_tonnes": round(total_recoverable, 3),
+        "nearest_facility": nearest,
+        "transport": {
+            "estimated_road_distance_km": round(weighted_road, 2),
+            "road_distance_factor": road_distance_factor,
+            "transport_rate_per_tonne_km": transport_rate_per_tonne_km,
+            "estimated_transport_cost_inr": round(total_transport_cost, 2),
+            "estimated_cost_per_tonne_inr": round(cost_per_tonne, 2),
+            "distance_aggregation_method": "recoverable-biomass-weighted mean across source-year fields",
+        },
+        "economics": {
+            "biomass_sale_price_inr_per_tonne": round(_number(biomass_sale_price_inr_per_tonne), 2),
+            "gross_revenue_inr": round(total_gross_revenue, 2),
+            "transport_cost_inr": round(total_transport_cost, 2),
+            "net_profit_inr": (
+                round(total_net_profit, 2)
+                if total_net_profit is not None
+                else None
+            ),
+            "net_profit_per_tonne_inr": (
+                round(net_profit_per_tonne, 2)
+                if net_profit_per_tonne is not None
+                else None
+            ),
+            "profit_margin_percent": (
+                round(profit_margin_percent, 2)
+                if profit_margin_percent is not None
+                else None
+            ),
+            "profit_status": (
+                "ready"
+                if all_sources_have_facility
+                else "partial_facility_coverage"
+            ),
+            "profit_definition": "gross biomass sale revenue minus estimated transport cost",
+        },
+        "warnings": warnings,
+        "facility_matching": {
+            "search_radius_km": search_radius_km,
+            "source_field_count": len(source_field_ids),
+            "source_fields_within_radius": within_radius_count,
+            "nearest_source_field_id": (
+                nearest_source_result.get("field_id")
+                if nearest_source_result
+                else None
+            ),
+        },
+        "source_field_ids": source_field_ids,
+        "source_field_count": len(source_field_ids),
+        "source_logistics": source_results,
         "methodology": (
-            "Estimated road distance = straight-line Haversine distance × "
-            "road-distance factor. Estimated transport cost = recoverable "
-            "biomass × estimated road distance × transport rate per tonne-km."
+            "For a logical multi-source field, each source-year geometry is evaluated separately. "
+            "Transport cost is calculated per source and summed; aggregate distance is recoverable-biomass weighted."
         ),
         "assumptions": {
             "road_distance_factor": road_distance_factor,
             "transport_rate_per_tonne_km_inr": transport_rate_per_tonne_km,
             "small_load_threshold_tonnes": SMALL_LOAD_THRESHOLD_TONNES,
+            "biomass_sale_price_inr_per_tonne": biomass_sale_price_inr_per_tonne,
         },
         "validation_note": (
-            "This is a logistics screening estimate. The road distance is "
-            "not obtained from a routing service, and the transport rate is "
-            "a configurable assumption rather than a live market quote. "
-            "Actual cost depends on vehicle type, loading, route, tolls, "
-            "fuel, contractor pricing, and minimum trip charges."
+            "This is a logistics screening estimate. Road distance is not obtained from a live routing service, "
+            "and the transport rate is a configurable assumption rather than a market quote. Actual cost depends "
+            "on vehicle type, loading, route, tolls, fuel, contractor pricing, and minimum trip charges."
         ),
-        "facility_matching": {
-            "search_radius_km": opportunity.get("search_radius_km"),
-            "facility_count": opportunity.get("facility_count", 0),
-            "within_radius_count": opportunity.get(
-                "within_radius_count",
-                0,
-            ),
-        },
-
-        # Backward-compatible flat fields for older frontend components.
-        # The canonical values remain available in nearest_facility/transport.
-        "straight_line_distance_km": round(straight_line_km, 2),
-        "estimated_road_distance_km": round(estimated_road_km, 2),
-        "estimated_transport_cost_inr": round(
-            estimated_transport_cost,
-            2,
+        # Backward-compatible flat fields.
+        "straight_line_distance_km": (
+            round(
+                _number(nearest.get("straight_line_distance_km")),
+                2,
+            )
+            if nearest
+            else None
         ),
+        "estimated_road_distance_km": round(weighted_road, 2),
+        "estimated_transport_cost_inr": round(total_transport_cost, 2),
         "cost_per_tonne_inr": round(cost_per_tonne, 2),
-        "search_radius_km": opportunity.get("search_radius_km"),
+        "search_radius_km": search_radius_km,
         "methodology_note": (
-            "Logistics values are screening estimates. "
-            "Road distance uses a configurable factor rather than live routing."
+            "Logistics values are screening estimates. Multi-source logical fields are calculated per source-year member and then aggregated."
         ),
     }
+
+
+def estimate_logistics(
+    field_id: str,
+    recoverable_biomass_tonnes: float | None = None,
+    search_radius_km: float = DEFAULT_SEARCH_RADIUS_KM,
+    road_distance_factor: float = DEFAULT_ROAD_DISTANCE_FACTOR,
+    transport_rate_per_tonne_km: float = DEFAULT_TRANSPORT_RATE_PER_TONNE_KM,
+    biomass_sale_price_inr_per_tonne: float = DEFAULT_BIOMASS_SALE_PRICE_INR_PER_TONNE,
+) -> Dict[str, Any]:
+    """Return logistics screening for one logical or source field."""
+
+    if road_distance_factor < 1.0:
+        raise ValueError("road_distance_factor must be >= 1.0")
+
+    if transport_rate_per_tonne_km < 0:
+        raise ValueError("transport_rate_per_tonne_km must be >= 0")
+
+    if search_radius_km <= 0:
+        raise ValueError("search_radius_km must be greater than 0")
+
+    if biomass_sale_price_inr_per_tonne < 0:
+        raise ValueError("biomass_sale_price_inr_per_tonne must be >= 0")
+
+    normalized_id = str(field_id).strip()
+    if not normalized_id:
+        raise ValueError("field_id cannot be empty")
+
+    context = resolve_field_context(normalized_id)
+    source_ids = [str(item) for item in context.get("source_field_ids", [])]
+
+    # A logical field with multiple source-year records must calculate
+    # distance-sensitive transport per source member before aggregation.
+    if len(source_ids) > 1 and normalized_id not in source_ids:
+        return _aggregate_logical_logistics(
+            field_id=normalized_id,
+            context=context,
+            search_radius_km=search_radius_km,
+            road_distance_factor=road_distance_factor,
+            transport_rate_per_tonne_km=transport_rate_per_tonne_km,
+            biomass_sale_price_inr_per_tonne=biomass_sale_price_inr_per_tonne,
+        )
+
+    # Preserve compatibility for a source field and for logical IDs with one
+    # source. Prefer the explicitly provided residue value when supplied.
+    source_id = source_ids[0] if source_ids else normalized_id
+
+    if recoverable_biomass_tonnes is None:
+        residue = estimate_residue(source_id)
+        recoverable = _number(
+            residue.get("recoverable_biomass_tonnes")
+        )
+    else:
+        recoverable = max(
+            0.0,
+            _number(recoverable_biomass_tonnes),
+        )
+
+    result = _source_logistics(
+        source_field_id=source_id,
+        recoverable_biomass_tonnes=recoverable,
+        search_radius_km=search_radius_km,
+        road_distance_factor=road_distance_factor,
+        transport_rate_per_tonne_km=transport_rate_per_tonne_km,
+        biomass_sale_price_inr_per_tonne=biomass_sale_price_inr_per_tonne,
+    )
+
+    nearest = result.get("nearest_facility")
+    transport = result.get("transport")
+    opportunity = result.get("opportunity") or {}
+
+    if nearest is None:
+        return {
+            "success": True,
+            "field_id": normalized_id,
+            "source_field_ids": source_ids,
+            "source_field_count": len(source_ids),
+            "prediction_type": "assumption-based logistics screening",
+            "logistics_status": result["logistics_status"],
+            "recoverable_biomass_tonnes": round(recoverable, 3),
+            "nearest_facility": None,
+            "transport": None,
+            "economics": {
+                "biomass_sale_price_inr_per_tonne": round(_number(biomass_sale_price_inr_per_tonne), 2),
+                "gross_revenue_inr": round(recoverable * _number(biomass_sale_price_inr_per_tonne), 2),
+                "transport_cost_inr": None,
+                "net_profit_inr": None,
+                "net_profit_per_tonne_inr": None,
+                "profit_margin_percent": None,
+                "profit_status": "not_computable_without_facility",
+                "profit_definition": "gross biomass sale revenue minus estimated transport cost",
+            },
+            "warnings": result.get("warnings") or [],
+            "facility_matching": {
+                "search_radius_km": search_radius_km,
+                "facility_count": opportunity.get("facility_count", 0),
+                "within_radius_count": opportunity.get("within_radius_count", 0),
+            },
+            "source_logistics": [result],
+            "assumptions": {
+                "biomass_sale_price_inr_per_tonne": biomass_sale_price_inr_per_tonne,
+            },
+            "methodology": (
+                "No registered biomass facility is available for distance calculation. "
+                "Add a sourced facility to the registry."
+            ),
+            "validation_note": (
+                "This module does not provide actual road routing or a transporter quotation."
+            ),
+            "straight_line_distance_km": None,
+            "estimated_road_distance_km": None,
+            "estimated_transport_cost_inr": None,
+            "cost_per_tonne_inr": None,
+            "search_radius_km": search_radius_km,
+            "methodology_note": "No-facility logistics screening result.",
+        }
+
+    return {
+        "success": True,
+        "field_id": normalized_id,
+        "source_field_ids": source_ids,
+        "source_field_count": len(source_ids),
+        "prediction_type": "assumption-based logistics screening",
+        "logistics_status": result["logistics_status"],
+        "recoverable_biomass_tonnes": round(recoverable, 3),
+        "nearest_facility": nearest,
+        "transport": transport,
+        "economics": result.get("economics") or {},
+        "warnings": result.get("warnings") or [],
+        "facility_matching": {
+            "search_radius_km": search_radius_km,
+            "facility_count": opportunity.get("facility_count", 0),
+            "within_radius_count": opportunity.get("within_radius_count", 0),
+        },
+        "source_logistics": [result],
+        "methodology": (
+            "Estimated road distance = straight-line Haversine distance × road-distance factor. "
+            "Estimated transport cost = recoverable biomass × estimated road distance × transport rate per tonne-km."
+        ),
+        "assumptions": {
+            "road_distance_factor": road_distance_factor,
+            "transport_rate_per_tonne_km_inr": transport_rate_per_tonne_km,
+            "small_load_threshold_tonnes": SMALL_LOAD_THRESHOLD_TONNES,
+            "biomass_sale_price_inr_per_tonne": biomass_sale_price_inr_per_tonne,
+        },
+        "validation_note": (
+            "This is a logistics screening estimate. The road distance is not obtained from a routing service, "
+            "and the transport rate is a configurable assumption rather than a live market quote. Actual cost "
+            "depends on vehicle type, loading, route, tolls, fuel, contractor pricing, and minimum trip charges."
+        ),
+        # Backward-compatible flat fields for older frontend components.
+        "straight_line_distance_km": _safe_round(
+            nearest.get("straight_line_distance_km")
+        ),
+        "estimated_road_distance_km": _safe_round(
+            transport.get("estimated_road_distance_km")
+        ),
+        "estimated_transport_cost_inr": _safe_round(
+            transport.get("estimated_transport_cost_inr")
+        ),
+        "cost_per_tonne_inr": _safe_round(
+            transport.get("estimated_cost_per_tonne_inr")
+        ),
+        "search_radius_km": search_radius_km,
+        "methodology_note": (
+            "Logistics values are screening estimates. Road distance uses a configurable factor rather than live routing."
+        ),
+    }
+
+
+if __name__ == "__main__":
+    import json
+
+    print(
+        json.dumps(
+            estimate_logistics("34"),
+            indent=2,
+            default=str,
+        )
+    )

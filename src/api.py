@@ -22,6 +22,11 @@ except ImportError:
     from field_grouping import group_summary, resolve_field_ids
 
 try:
+    from .field_context import resolve_field_context
+except ImportError:
+    from field_context import resolve_field_context
+
+try:
     from .logistics_estimation import estimate_logistics
 except ImportError:
     from logistics_estimation import estimate_logistics
@@ -903,8 +908,11 @@ def field_analysis(field_id: str):
     requested_field_id = clean_field_id(field_id)
 
     try:
-        summary = group_summary(requested_field_id, GEOJSON_PATH)
-        source_field_ids = summary["source_field_ids"]
+        field_context = resolve_field_context(
+            requested_field_id,
+            GEOJSON_PATH,
+        )
+        source_field_ids = field_context["source_field_ids"]
     except (ValueError, KeyError, FileNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -922,39 +930,20 @@ def field_analysis(field_id: str):
     # ---------------------------------------------------------
     # Source-year field information
     # ---------------------------------------------------------
-    source_features = []
-    geojson = load_geojson()
-
-    for feature in geojson.get("features", []):
-        properties = feature.get("properties") or {}
-        source_id = clean_field_id(
-            properties.get("field_id")
-            or properties.get("id")
-            or properties.get("ID")
-            or properties.get("Id")
-        )
-        if source_id in source_field_ids:
-            source_features.append(feature)
-
-    categories = []
-    source_fields = []
-
-    for feature in source_features:
-        properties = feature.get("properties") or {}
-        category = (
-            properties.get("field_category")
-            or properties.get("category")
-        )
-        if category is not None:
-            categories.append(str(category))
-
-        source_fields.append({
-            "field_id": clean_field_id(properties.get("field_id")),
-            "source_year": properties.get("source_year"),
-            "field_name": properties.get("field_name"),
-            "category": category,
-            "original_field_id": properties.get("original_field_id"),
-        })
+    # The shared field context has already resolved the logical ID and loaded
+    # the matching source-year features. Reuse that context instead of making
+    # every downstream feature read its own copy of the GeoJSON.
+    categories = list(field_context.get("categories") or [])
+    source_fields = [
+        {
+            "field_id": item.get("field_id"),
+            "source_year": item.get("source_year"),
+            "field_name": item.get("field_name"),
+            "category": item.get("category"),
+            "original_field_id": item.get("original_field_id"),
+        }
+        for item in field_context.get("source_fields", [])
+    ]
 
     if len(source_field_ids) == 1:
         field_category = categories[0] if categories else None
@@ -1155,7 +1144,7 @@ def field_analysis(field_id: str):
         "field_id": requested_field_id,
         "source_field_ids": source_field_ids,
         "source_field_count": len(source_field_ids),
-        "geometry_mode": summary["geometry_mode"],
+        "geometry_mode": field_context["geometry_mode"],
         "field_category": field_category,
         "latest_observation": latest_observation,
         "transition_analysis": transition,

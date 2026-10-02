@@ -281,6 +281,7 @@ function FieldDrawer({
   const opportunity = moduleData.opportunity;
   const cluster = moduleData.cluster;
   const logistics = moduleData.logistics;
+  const economics = logistics?.economics || {};
   const liveBurn = moduleData.burn;
 
   const latest =
@@ -1248,6 +1249,78 @@ function FieldDrawer({
                                 </div>
                               )}
 
+                              <div className="logistics-status-line">
+                                <span>ECONOMICS</span>
+                                <strong>Estimated net profit</strong>
+                              </div>
+
+                              <div className="biomass-highlight">
+                                <div>
+                                  <span>Net profit</span>
+                                  <strong>
+                                    {formatCurrency(
+                                      economics.net_profit_inr
+                                    )}
+                                  </strong>
+                                </div>
+                                <div className="biomass-highlight-badge">
+                                  {economics?.profit_status ===
+                                  "not_computable_without_facility"
+                                    ? "Needs facility match"
+                                    : economics?.profit_status ===
+                                      "partial_facility_coverage"
+                                    ? "Partial coverage"
+                                    : "Screening estimate"}
+                                </div>
+                              </div>
+
+                              <div className="biomass-metric-grid">
+                                <MetricCard
+                                  label="Biomass sale price"
+                                  value={
+                                    economics.biomass_sale_price_inr_per_tonne !=
+                                    null
+                                      ? `${formatCurrency(
+                                          economics.biomass_sale_price_inr_per_tonne
+                                        )} / t`
+                                      : "N/A"
+                                  }
+                                  icon={Wheat}
+                                />
+                                <MetricCard
+                                  label="Gross revenue"
+                                  value={formatCurrency(
+                                    economics.gross_revenue_inr
+                                  )}
+                                  icon={TrendingUp}
+                                />
+                                <MetricCard
+                                  label="Transport cost"
+                                  value={formatCurrency(
+                                    economics.transport_cost_inr
+                                  )}
+                                  icon={Truck}
+                                />
+                                <MetricCard
+                                  label="Profit / tonne"
+                                  value={formatCurrency(
+                                    economics.net_profit_per_tonne_inr
+                                  )}
+                                  icon={Target}
+                                />
+                              </div>
+
+                              <p className="biomass-note">
+                                  {economics.profit_status ===
+                                  "not_computable_without_facility"
+                                    ? "Net profit is not computed until a registered biomass facility is available because transport cost is required."
+                                    : economics.profit_status ===
+                                      "partial_facility_coverage"
+                                    ? "Net profit is not finalized because one or more source-year fields have no registered facility match."
+                                    : economics.profit_definition ||
+                                      "Estimated net profit = biomass sale revenue − estimated transport cost."}
+                                </p>
+
                               <p className="biomass-note">
                                 {logistics.validation_note ||
                                   "Road distance and transport cost are screening assumptions, not live routing or a transporter quotation."}
@@ -1401,9 +1474,10 @@ function FieldDrawer({
 
               <div className="drawer-footnote">
                 Satellite observations are interpreted as monitoring evidence.
-                Burn, biomass, facility, clustering, and logistics values are
-                screening estimates based on the current Project Parali model
-                assumptions and are not confirmed operational commitments.
+                Burn, biomass, facility, clustering, logistics, and economics
+                values are screening estimates based on the current Project
+                Parali model assumptions and are not confirmed operational
+                commitments.
               </div>
             </>
           )}

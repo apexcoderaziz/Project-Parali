@@ -19,14 +19,21 @@ from __future__ import annotations
 import json
 import math
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from statistics import median
 from typing import Any
 
-from .field_grouping import combined_geometry, group_summary, load_field_features, resolve_field_ids
+try:
+    from .field_context import resolve_field_context
+except ImportError:
+    from field_context import resolve_field_context
 
-import ee
+try:
+    from .satellite_service import get_sentinel2_series
+except ImportError:
+    from satellite_service import get_sentinel2_series
+
 import pandas as pd
 
 
@@ -45,163 +52,16 @@ MAX_CLOUD_PERCENT = 40
 REDUCE_SCALE = 10
 
 
-_initialized = False
-
-
-def _initialize_earth_engine() -> None:
-    global _initialized
-
-    if _initialized:
-        return
-
-    try:
-        ee.Initialize(project=EE_PROJECT)
-    except Exception as exc:
-        raise RuntimeError(
-            "Google Earth Engine is not initialized for the API process. "
-            "Run Earth Engine authentication for this Windows account and "
-            f"make sure project '{EE_PROJECT}' is available. Original error: {exc}"
-        ) from exc
-
-    _initialized = True
-
-
-def _load_field_geometry(field_id: str) -> dict[str, Any]:
-    """Load the selected field geometry, combining all matching source years."""
-
-    return combined_geometry(field_id, str(GEOJSON_PATH))
-
-
-def _mask_and_indices(image: ee.Image) -> ee.Image:
-    qa = image.select("QA60")
-    cloud_bit = 1 << 10
-    cirrus_bit = 1 << 11
-
-    mask = (
-        qa.bitwiseAnd(cloud_bit).eq(0)
-        .And(qa.bitwiseAnd(cirrus_bit).eq(0))
-    )
-
-    scaled = image.updateMask(mask).divide(10000)
-
-    ndvi = scaled.normalizedDifference(["B8", "B4"]).rename("NDVI")
-    nbr = scaled.normalizedDifference(["B8", "B12"]).rename("NBR")
-
-    return scaled.addBands([ndvi, nbr]).copyProperties(
-        image, image.propertyNames()
-    )
-
 
 def _fetch_current_series(field_id: str) -> list[dict[str, Any]]:
-    _initialize_earth_engine()
+    """Return the shared canonical Sentinel-2 series for the field."""
 
-    geometry_dict = _load_field_geometry(field_id)
-    region = ee.Geometry(geometry_dict)
-
-    today = date.today()
-    start = today - timedelta(days=LOOKBACK_DAYS)
-    end = today + timedelta(days=1)
-
-    # Keep only images that have a valid acquisition timestamp before any
-    # server-side mapping. Some Sentinel-2 records can otherwise reach the
-    # mapped function with a null system:time_start, which makes ee.Date()
-    # fail with: "Date: Parameter 'value' is required and may not be null."
-    collection = (
-        ee.ImageCollection(COLLECTION)
-        .filterBounds(region)
-        .filterDate(start.isoformat(), end.isoformat())
-        .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", MAX_CLOUD_PERCENT))
-        .filter(ee.Filter.notNull(["system:time_start"]))
-        .map(_mask_and_indices)
+    return get_sentinel2_series(
+        field_id=field_id,
+        lookback_days=LOOKBACK_DAYS,
+        max_cloud_percent=MAX_CLOUD_PERCENT,
+        reduce_scale=REDUCE_SCALE,
     )
-
-    def summarize(image: ee.Image) -> ee.Feature:
-        # The collection was filtered for non-null timestamps above. Keep the
-        # original acquisition timestamp on the transformed image as well.
-        reduced = image.select(["NDVI", "NBR"]).reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=region,
-            scale=REDUCE_SCALE,
-            bestEffort=True,
-            maxPixels=1_000_000,
-        )
-
-        # Some Earth Engine image transformations can leave a mapped image
-        # without the expected acquisition-time metadata. Guard the date
-        # before constructing ee.Date so one malformed image cannot fail the
-        # entire server-side collection evaluation.
-        time_start = image.get("system:time_start")
-        date_value = ee.Date(time_start).format("YYYY-MM-dd")
-
-        return ee.Feature(
-            None,
-            {
-                "date": date_value,
-                "ndvi": reduced.get("NDVI"),
-                "nbr": reduced.get("NBR"),
-                "cloud_pct": image.get("CLOUDY_PIXEL_PERCENTAGE"),
-            },
-        )
-
-    features = ee.FeatureCollection(collection.map(summarize)).getInfo()
-
-    observations: list[dict[str, Any]] = []
-    for feature in features.get("features", []):
-        props = feature.get("properties") or {}
-        ndvi = props.get("ndvi")
-        nbr = props.get("nbr")
-        obs_date = props.get("date")
-
-        if obs_date is None or ndvi is None or nbr is None:
-            continue
-
-        try:
-            observations.append(
-                {
-                    "date": str(obs_date),
-                    "ndvi": float(ndvi),
-                    "nbr": float(nbr),
-                    "cloud_pct": (
-                        None
-                        if props.get("cloud_pct") is None
-                        else float(props["cloud_pct"])
-                    ),
-                }
-            )
-        except (TypeError, ValueError):
-            continue
-
-    observations.sort(key=lambda item: item["date"])
-
-    # Multiple Sentinel-2 granules can produce duplicate dates. Average them
-    # so the trend is driven by the field-level daily observation, not tile count.
-    if not observations:
-        return []
-
-    frame = pd.DataFrame(observations)
-    grouped = (
-        frame.groupby("date", as_index=False)
-        .agg(
-            ndvi=("ndvi", "mean"),
-            nbr=("nbr", "mean"),
-            cloud_pct=("cloud_pct", "mean"),
-        )
-        .sort_values("date")
-    )
-
-    return [
-        {
-            "date": row["date"],
-            "ndvi": round(float(row["ndvi"]), 4),
-            "nbr": round(float(row["nbr"]), 4),
-            "cloud_pct": (
-                None
-                if pd.isna(row["cloud_pct"])
-                else round(float(row["cloud_pct"]), 2)
-            ),
-        }
-        for _, row in grouped.iterrows()
-    ]
 
 
 def _historical_candidate_days(field_id: str | None = None) -> list[int]:
@@ -215,7 +75,9 @@ def _historical_candidate_days(field_id: str | None = None) -> list[int]:
         return []
 
     if field_id is not None and "field_id" in df.columns:
-        source_ids = set(resolve_field_ids(field_id, str(GEOJSON_PATH)))
+        source_ids = set(
+            resolve_field_context(field_id, str(GEOJSON_PATH))["source_field_ids"]
+        )
         if source_ids:
             df["field_id"] = df["field_id"].astype(str).str.strip()
             df = df[df["field_id"].isin(source_ids)]
@@ -395,7 +257,7 @@ def predict_harvest(field_id: str) -> dict[str, Any]:
     signals = _score_current_signals(series)
 
     historical_days = _historical_candidate_days(normalized_id)
-    field_group = group_summary(normalized_id, str(GEOJSON_PATH))
+    field_group = resolve_field_context(normalized_id, str(GEOJSON_PATH))
     today = date.today()
     current_day = today.timetuple().tm_yday
 
