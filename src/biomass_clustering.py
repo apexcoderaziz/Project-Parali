@@ -169,6 +169,109 @@ def _geometry_centroid(geometry: Optional[Dict[str, Any]]):
 
 
 # ============================================================
+# GEOMETRY AREA FALLBACK
+# ============================================================
+
+def _ring_area_m2(ring: Any) -> float:
+    """
+    Approximate a GeoJSON polygon-ring area in square metres using a
+    local equirectangular projection.
+
+    This is a fallback only. If area_hectares already exists in the
+    field metadata, that value is preferred.
+    """
+    if not isinstance(ring, list) or len(ring) < 3:
+        return 0.0
+
+    points = []
+    for point in ring:
+        if (
+            isinstance(point, list)
+            and len(point) >= 2
+            and isinstance(point[0], (int, float))
+            and isinstance(point[1], (int, float))
+        ):
+            points.append(
+                (
+                    _safe_float(point[0]),
+                    _safe_float(point[1]),
+                )
+            )
+
+    if len(points) < 3:
+        return 0.0
+
+    mean_lat = sum(lat for _, lat in points) / len(points)
+
+    meters_per_degree_lat = 111_320.0
+    meters_per_degree_lon = (
+        111_320.0 * math.cos(math.radians(mean_lat))
+    )
+
+    projected = [
+        (
+            lon * meters_per_degree_lon,
+            lat * meters_per_degree_lat,
+        )
+        for lon, lat in points
+    ]
+
+    area = 0.0
+    for i in range(len(projected)):
+        x1, y1 = projected[i]
+        x2, y2 = projected[(i + 1) % len(projected)]
+        area += x1 * y2 - x2 * y1
+
+    return abs(area) / 2.0
+
+
+def _geometry_area_m2(geometry: Optional[Dict[str, Any]]) -> float:
+    """
+    Calculate approximate Polygon/MultiPolygon area in square metres.
+
+    For MultiPolygon, polygon parts are summed. For each polygon,
+    the outer ring area is reduced by inner-ring (hole) areas.
+    """
+    if not geometry:
+        return 0.0
+
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+
+    if geometry_type == "Polygon":
+        if not isinstance(coordinates, list) or not coordinates:
+            return 0.0
+
+        outer = _ring_area_m2(coordinates[0])
+        holes = sum(
+            _ring_area_m2(ring)
+            for ring in coordinates[1:]
+        )
+        return max(0.0, outer - holes)
+
+    if geometry_type == "MultiPolygon":
+        total = 0.0
+
+        if not isinstance(coordinates, list):
+            return 0.0
+
+        for polygon in coordinates:
+            if not isinstance(polygon, list) or not polygon:
+                continue
+
+            outer = _ring_area_m2(polygon[0])
+            holes = sum(
+                _ring_area_m2(ring)
+                for ring in polygon[1:]
+            )
+            total += max(0.0, outer - holes)
+
+        return total
+
+    return 0.0
+
+
+# ============================================================
 # BIOMASS ESTIMATION
 # ============================================================
 
@@ -242,6 +345,10 @@ def load_fields(
             {},
         )
 
+        # Prefer the existing enriched field area. If the GeoJSON being
+        # used at runtime is the raw source without field_indicators,
+        # calculate area directly from the polygon geometry instead of
+        # silently turning the field into a zero-biomass field.
         area_hectares = _safe_float(
             indicators.get(
                 "area_hectares"
@@ -253,6 +360,12 @@ def load_fields(
                 0.0,
             ),
         )
+
+        if area_hectares <= 0:
+            area_m2 = _geometry_area_m2(
+                geometry
+            )
+            area_hectares = area_m2 / 10_000.0
 
         biomass = _estimate_biomass(
             area_hectares
@@ -290,6 +403,19 @@ def load_fields(
                 "area_acres": (
                     area_hectares
                     * 2.47105
+                ),
+                "area_source": (
+                    "field_indicators"
+                    if _safe_float(
+                        indicators.get("area_hectares")
+                    ) > 0
+                    else (
+                        "properties.area_hectares"
+                        if _safe_float(
+                            properties.get("area_hectares")
+                        ) > 0
+                        else "geometry_area_fallback"
+                    )
                 ),
                 "latitude": centroid[
                     "latitude"

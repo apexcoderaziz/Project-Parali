@@ -190,4 +190,19 @@ def estimate_logistics(
                 0,
             ),
         },
+
+        # Backward-compatible flat fields for older frontend components.
+        # The canonical values remain available in nearest_facility/transport.
+        "straight_line_distance_km": round(straight_line_km, 2),
+        "estimated_road_distance_km": round(estimated_road_km, 2),
+        "estimated_transport_cost_inr": round(
+            estimated_transport_cost,
+            2,
+        ),
+        "cost_per_tonne_inr": round(cost_per_tonne, 2),
+        "search_radius_km": opportunity.get("search_radius_km"),
+        "methodology_note": (
+            "Logistics values are screening estimates. "
+            "Road distance uses a configurable factor rather than live routing."
+        ),
     }

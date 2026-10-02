@@ -579,6 +579,31 @@ function FieldDrawer({
                         </strong>
                       </div>
 
+                      <div className="transition-drawer-row">
+                        <span>Planned capacity utilization</span>
+                        <strong>
+                          {cluster.recoverable_biomass_tonnes != null &&
+                          cluster.estimated_truckloads != null &&
+                          cluster.truck_capacity_tonnes != null &&
+                          Number(cluster.estimated_truckloads) > 0 &&
+                          Number(cluster.truck_capacity_tonnes) > 0
+                            ? `${Math.min(
+                                100,
+                                (Number(cluster.recoverable_biomass_tonnes) /
+                                  (Number(cluster.estimated_truckloads) *
+                                    Number(cluster.truck_capacity_tonnes))) *
+                                  100
+                              ).toFixed(1)}%`
+                            : "N/A"}
+                        </strong>
+                      </div>
+
+                      <p>
+                        Aggregating nearby fields helps create larger collection
+                        loads. This utilization is a planning indicator, not a
+                        guarantee of actual truck filling or collection.
+                      </p>
+
                       <p>
                         Truckload count is a simplified planning estimate.
                         It does not confirm farmer participation, actual
@@ -620,8 +645,8 @@ function FieldDrawer({
                       <Ruler size={16} />
                       <span>Straight-line distance</span>
                       <strong>
-                        {logisticsEstimate.straight_line_distance_km != null
-                          ? `${logisticsEstimate.straight_line_distance_km} km`
+                        {logisticsEstimate.nearest_facility?.straight_line_distance_km != null
+                          ? `${logisticsEstimate.nearest_facility.straight_line_distance_km} km`
                           : "N/A"}
                       </strong>
                     </div>
@@ -630,8 +655,8 @@ function FieldDrawer({
                       <Ruler size={16} />
                       <span>Estimated road distance</span>
                       <strong>
-                        {logisticsEstimate.estimated_road_distance_km != null
-                          ? `${logisticsEstimate.estimated_road_distance_km} km`
+                        {logisticsEstimate.transport?.estimated_road_distance_km != null
+                          ? `${logisticsEstimate.transport.estimated_road_distance_km} km`
                           : "N/A"}
                       </strong>
                     </div>
@@ -640,10 +665,9 @@ function FieldDrawer({
                       <Package size={16} />
                       <span>Transport cost</span>
                       <strong>
-                        {logisticsEstimate.estimated_transport_cost_inr != null
+                        {logisticsEstimate.transport?.estimated_transport_cost_inr != null
                           ? `₹${Number(
-                              logisticsEstimate
-                                .estimated_transport_cost_inr
+                              logisticsEstimate.transport.estimated_transport_cost_inr
                             ).toFixed(0)}`
                           : "N/A"}
                       </strong>
@@ -665,9 +689,9 @@ function FieldDrawer({
                     <div className="transition-drawer-row">
                       <span>Cost per tonne</span>
                       <strong>
-                        {logisticsEstimate.cost_per_tonne_inr != null
+                        {logisticsEstimate.transport?.estimated_cost_per_tonne_inr != null
                           ? `₹${Number(
-                              logisticsEstimate.cost_per_tonne_inr
+                              logisticsEstimate.transport.estimated_cost_per_tonne_inr
                             ).toFixed(0)}/t`
                           : "N/A"}
                       </strong>
@@ -676,14 +700,14 @@ function FieldDrawer({
                     <div className="transition-drawer-row">
                       <span>Search radius</span>
                       <strong>
-                        {logisticsEstimate.search_radius_km != null
-                          ? `${logisticsEstimate.search_radius_km} km`
+                        {logisticsEstimate.facility_matching?.search_radius_km != null
+                          ? `${logisticsEstimate.facility_matching.search_radius_km} km`
                           : "N/A"}
                       </strong>
                     </div>
 
                     <p>
-                      {logisticsEstimate.methodology_note ||
+                      {logisticsEstimate.methodology ||
                         "Logistics values are screening estimates."}
                     </p>
 
