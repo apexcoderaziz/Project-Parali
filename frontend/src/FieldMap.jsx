@@ -3,7 +3,8 @@ import {
   TileLayer,
   GeoJSON,
   Marker,
-  useMap
+  useMap,
+  LayersControl
 } from "react-leaflet";
 
 import {
@@ -14,99 +15,116 @@ import {
 import L from "leaflet";
 
 
-// =====================================================
-// CATEGORY COLORS
-// =====================================================
-
 const getCategoryStyle = (category) => {
-  const normalizedCategory =
+  const normalized =
     String(category || "")
       .toLowerCase()
-      .trim();
+      .trim()
+      .replace(/-/g, "_")
+      .replace(/\s+/g, "_");
 
-  // Unburnt
   if (
-    normalizedCategory === "unburnt" ||
-    normalizedCategory === "unburned"
+    normalized === "unburnt" ||
+    normalized === "unburned"
   ) {
     return {
-      color: "#15803d",
-      weight: 2,
-      fillColor: "#22c55e",
-      fillOpacity: 0.25
+      color: "#83b86b",
+      fillColor: "#b8ef75",
+      fillOpacity: 0.24
     };
   }
 
-  // Partially burnt
   if (
-    normalizedCategory === "partially_burnt" ||
-    normalizedCategory === "partially burnt" ||
-    normalizedCategory === "partial_burnt" ||
-    normalizedCategory === "partial burnt"
+    normalized === "partially_burnt" ||
+    normalized === "partial_burnt"
   ) {
     return {
-      color: "#c2410c",
-      weight: 2,
-      fillColor: "#f97316",
-      fillOpacity: 0.30
+      color: "#f3a94d",
+      fillColor: "#ffb74d",
+      fillOpacity: 0.26
     };
   }
 
-  // Completely burnt
   if (
-    normalizedCategory === "completely_burnt" ||
-    normalizedCategory === "completely burnt" ||
-    normalizedCategory === "burnt" ||
-    normalizedCategory === "burned"
+    normalized === "completely_burnt" ||
+    normalized === "burnt" ||
+    normalized === "burned"
   ) {
     return {
-      color: "#b91c1c",
-      weight: 2,
-      fillColor: "#ef4444",
-      fillOpacity: 0.30
+      color: "#ef6d5a",
+      fillColor: "#ff7465",
+      fillOpacity: 0.26
     };
   }
 
-  // Unknown
   return {
-    color: "#6b7280",
-    weight: 2,
-    fillColor: "#9ca3af",
-    fillOpacity: 0.20
+    color: "#c2d0c8",
+    fillColor: "#d7e2dc",
+    fillOpacity: 0.2
   };
 };
 
 
-// =====================================================
-// FIELD INTELLIGENCE HELPERS
-// =====================================================
+const getIndicators = (feature) =>
+  feature?.properties?.field_indicators ||
+  feature?.properties?.indicators ||
+  {};
 
-const getIndicators = (feature) => {
+
+const getFieldId = (
+  feature,
+  index
+) => {
+  const raw =
+    feature?.properties?.field_id ??
+    feature?.properties?.id;
+
+  if (
+    raw !== null &&
+    raw !== undefined &&
+    String(raw).trim()
+  ) {
+    return String(raw).trim();
+  }
+
+  return `field-${index + 1}`;
+};
+
+
+const getDisplayFieldNumber = (
+  feature,
+  index
+) => {
+  const fieldId =
+    getFieldId(feature, index);
+
   return (
-    feature?.properties?.field_indicators ||
-    feature?.properties?.indicators ||
-    {}
+    String(fieldId).match(
+      /^\d{4}_(.+)$/
+    )?.[1] || fieldId
   );
 };
 
 
-const getFieldId = (feature, index) => {
-  const rawFieldId =
-    feature?.properties?.field_id;
-
-  // IMPORTANT:
-  // IDs such as 2020_34 and 2021_34
-  // must remain strings.
+const getSourceYear = (feature) => {
+  const sourceYear =
+    feature?.properties?.source_year;
 
   if (
-    rawFieldId !== null &&
-    rawFieldId !== undefined &&
-    String(rawFieldId).trim() !== ""
+    sourceYear !== null &&
+    sourceYear !== undefined &&
+    String(sourceYear).trim()
   ) {
-    return String(rawFieldId).trim();
+    return String(sourceYear).trim();
   }
 
-  return `field-${index + 1}`;
+  return (
+    String(
+      feature?.properties?.field_id ||
+        ""
+    ).match(/^\d{4}_/)?.[0] ||
+    ""
+  ).replace("_", "");
 };
 
 
@@ -117,7 +135,7 @@ const getCategory = (feature) => {
   return (
     feature?.properties?.category ||
     feature?.properties?.field_category ||
-    indicators?.category ||
+    indicators.category ||
     "Unknown"
   );
 };
@@ -129,7 +147,7 @@ const getFieldStatus = (feature) => {
 
   return (
     feature?.properties?.field_status ||
-    indicators?.field_status ||
+    indicators.field_status ||
     "Unknown"
   );
 };
@@ -141,57 +159,29 @@ const getCandidateDate = (feature) => {
 
   return (
     feature?.properties?.candidate_date ||
-    indicators?.candidate_date ||
+    indicators.candidate_date ||
     null
   );
 };
 
 
-const getNdviTrend = (feature) => {
-  const indicators =
-    getIndicators(feature);
-
-  return (
-    feature?.properties?.ndvi_trend ||
-    indicators?.ndvi_trend ||
-    null
-  );
-};
-
-
-const getNbrTrend = (feature) => {
-  const indicators =
-    getIndicators(feature);
-
-  return (
-    feature?.properties?.nbr_trend ||
-    indicators?.nbr_trend ||
-    null
-  );
-};
-
-
-const isTransitionCandidate = (feature) => {
+const isTransitionCandidate = (
+  feature
+) => {
   const status =
     String(getFieldStatus(feature))
       .toLowerCase()
       .trim();
 
-  const candidateDate =
-    getCandidateDate(feature);
-
-  return (
-    Boolean(candidateDate) ||
-    status === "crop_transition_candidate" ||
+  return Boolean(
+    getCandidateDate(feature)
+  ) ||
+    status ===
+      "crop_transition_candidate" ||
     status.includes("crop-transition") ||
-    status.includes("transition candidate")
-  );
+    status.includes("transition candidate");
 };
 
-
-// =====================================================
-// TRANSITION MAP STYLE
-// =====================================================
 
 const getTransitionStyle = (
   baseStyle,
@@ -203,71 +193,17 @@ const getTransitionStyle = (
 
   return {
     ...baseStyle,
-
-    // Yellow dashed border represents
-    // crop-transition candidate signal.
-    color: "#eab308",
-
+    color: "#e8e873",
     weight: 3,
-
     dashArray: "7 5",
-
     fillOpacity:
       Math.min(
         0.42,
-        (baseStyle.fillOpacity || 0.25) + 0.08
+        (baseStyle.fillOpacity || 0.2) + 0.08
       )
   };
 };
 
-
-// =====================================================
-// MAP SIZE FIX
-// =====================================================
-
-function MapSizeFix() {
-  const map = useMap();
-
-  useEffect(() => {
-    const invalidateMap = () => {
-      map.invalidateSize({
-        animate: false,
-        pan: false
-      });
-    };
-
-    // Initial fix
-    invalidateMap();
-
-    // Fix after layout settles
-    const timers = [
-      setTimeout(invalidateMap, 100),
-      setTimeout(invalidateMap, 500),
-      setTimeout(invalidateMap, 1000)
-    ];
-
-    window.addEventListener(
-      "resize",
-      invalidateMap
-    );
-
-    return () => {
-      timers.forEach(clearTimeout);
-
-      window.removeEventListener(
-        "resize",
-        invalidateMap
-      );
-    };
-  }, [map]);
-
-  return null;
-}
-
-
-// =====================================================
-// FIT MAP TO ALL FIELDS
-// =====================================================
 
 function FitBounds({
   geojson
@@ -276,27 +212,22 @@ function FitBounds({
 
   useEffect(() => {
     if (
-      !geojson ||
-      !geojson.features ||
-      geojson.features.length === 0
+      !geojson?.features?.length
     ) {
       return;
     }
 
     try {
-      const layer =
-        L.geoJSON(geojson);
-
       const bounds =
-        layer.getBounds();
+        L.geoJSON(
+          geojson
+        ).getBounds();
 
       if (bounds.isValid()) {
         map.fitBounds(
           bounds,
           {
-            padding: [30, 30],
-            maxZoom: 13,
-            animate: true
+            padding: [24, 24]
           }
         );
       }
@@ -312,491 +243,29 @@ function FitBounds({
 }
 
 
-// =====================================================
-// CUSTOM MAP CONTROLS
-// =====================================================
-
-function MapControls({
-  geojson
-}) {
+function ResizeMap() {
   const map = useMap();
 
   useEffect(() => {
-    const control =
-      L.control({
-        position: "topright"
-      });
+    const invalidate = () =>
+      map.invalidateSize();
 
-    control.onAdd = () => {
-      const container =
-        L.DomUtil.create(
-          "div",
-          "parali-map-controls"
-        );
-
-      container.style.display =
-        "flex";
-
-      container.style.flexDirection =
-        "column";
-
-      container.style.gap =
-        "6px";
-
-
-      // -------------------------------------------------
-      // BUTTON CREATOR
-      // -------------------------------------------------
-
-      const createButton = (
-        label,
-        title,
-        callback
-      ) => {
-        const button =
-          L.DomUtil.create(
-            "button",
-            "parali-map-control-button",
-            container
-          );
-
-        button.type = "button";
-
-        button.innerHTML =
-          label;
-
-        button.title =
-          title;
-
-        button.setAttribute(
-          "aria-label",
-          title
-        );
-
-        button.style.width =
-          "38px";
-
-        button.style.height =
-          "38px";
-
-        button.style.border =
-          "1px solid #d1d5db";
-
-        button.style.borderRadius =
-          "8px";
-
-        button.style.background =
-          "#ffffff";
-
-        button.style.color =
-          "#111827";
-
-        button.style.fontSize =
-          "20px";
-
-        button.style.fontWeight =
-          "700";
-
-        button.style.lineHeight =
-          "1";
-
-        button.style.cursor =
-          "pointer";
-
-        button.style.display =
-          "flex";
-
-        button.style.alignItems =
-          "center";
-
-        button.style.justifyContent =
-          "center";
-
-        button.style.boxShadow =
-          "0 2px 8px rgba(0,0,0,0.18)";
-
-
-        // Prevent map dragging/zooming
-        // when interacting with controls.
-        L.DomEvent.disableClickPropagation(
-          button
-        );
-
-        L.DomEvent.on(
-          button,
-          "mousedown",
-          L.DomEvent.stopPropagation
-        );
-
-        L.DomEvent.on(
-          button,
-          "click",
-          (event) => {
-            L.DomEvent.stop(event);
-            callback();
-          }
-        );
-
-        return button;
-      };
-
-
-      // -------------------------------------------------
-      // ZOOM IN
-      // -------------------------------------------------
-
-      createButton(
-        "+",
-        "Zoom in",
-        () => {
-          map.zoomIn();
-        }
+    const timer =
+      window.setTimeout(
+        invalidate,
+        120
       );
 
-
-      // -------------------------------------------------
-      // ZOOM OUT
-      // -------------------------------------------------
-
-      createButton(
-        "−",
-        "Zoom out",
-        () => {
-          map.zoomOut();
-        }
-      );
-
-
-      // -------------------------------------------------
-      // HOME / RESET
-      // -------------------------------------------------
-
-      createButton(
-        "⌂",
-        "Reset map to all fields",
-        () => {
-          if (
-            geojson &&
-            geojson.features &&
-            geojson.features.length > 0
-          ) {
-            const bounds =
-              L.geoJSON(
-                geojson
-              ).getBounds();
-
-            if (bounds.isValid()) {
-              map.fitBounds(
-                bounds,
-                {
-                  padding: [30, 30],
-                  maxZoom: 13,
-                  animate: true
-                }
-              );
-
-              return;
-            }
-          }
-
-          map.setView(
-            [30.0, 75.0],
-            10,
-            {
-              animate: true
-            }
-          );
-        }
-      );
-
-
-      // -------------------------------------------------
-      // FULLSCREEN
-      // -------------------------------------------------
-
-      const fullscreenButton =
-        createButton(
-          "⛶",
-          "Enter fullscreen",
-          () => {
-            const mapContainer =
-              map.getContainer();
-
-            if (
-              document.fullscreenElement
-            ) {
-              if (
-                document.exitFullscreen
-              ) {
-                document.exitFullscreen();
-              }
-
-              return;
-            }
-
-            if (
-              mapContainer.requestFullscreen
-            ) {
-              mapContainer.requestFullscreen();
-            }
-          }
-        );
-
-
-      // -------------------------------------------------
-      // FULLSCREEN STATE
-      // -------------------------------------------------
-
-      const handleFullscreenChange =
-        () => {
-          if (
-            document.fullscreenElement
-          ) {
-            fullscreenButton.title =
-              "Exit fullscreen";
-
-            fullscreenButton.setAttribute(
-              "aria-label",
-              "Exit fullscreen"
-            );
-          } else {
-            fullscreenButton.title =
-              "Enter fullscreen";
-
-            fullscreenButton.setAttribute(
-              "aria-label",
-              "Enter fullscreen"
-            );
-          }
-
-          setTimeout(() => {
-            map.invalidateSize();
-          }, 200);
-        };
-
-
-      document.addEventListener(
-        "fullscreenchange",
-        handleFullscreenChange
-      );
-
-
-      container._fullscreenHandler =
-        handleFullscreenChange;
-
-      return container;
-    };
-
-
-    control.addTo(map);
-
+    window.addEventListener(
+      "resize",
+      invalidate
+    );
 
     return () => {
-      const container =
-        control.getContainer();
-
-      if (
-        container?._fullscreenHandler
-      ) {
-        document.removeEventListener(
-          "fullscreenchange",
-          container._fullscreenHandler
-        );
-      }
-
-      map.removeControl(
-        control
-      );
-    };
-  }, [map, geojson]);
-
-  return null;
-}
-
-
-// =====================================================
-// ZOOM SLIDER
-// =====================================================
-
-function ZoomSlider() {
-  const map = useMap();
-
-  useEffect(() => {
-    const MIN_ZOOM = 8;
-    const MAX_ZOOM = 18;
-
-    const ZoomSliderControl =
-      L.Control.extend({
-        options: {
-          position: "bottomright"
-        },
-
-        onAdd() {
-          const container =
-            L.DomUtil.create(
-              "div",
-              "parali-zoom-slider"
-            );
-
-          container.style.background =
-            "#ffffff";
-
-          container.style.padding =
-            "8px 7px";
-
-          container.style.border =
-            "1px solid #d1d5db";
-
-          container.style.borderRadius =
-            "8px";
-
-          container.style.boxShadow =
-            "0 2px 8px rgba(0,0,0,0.18)";
-
-
-          // Slider
-          const slider =
-            L.DomUtil.create(
-              "input",
-              "",
-              container
-            );
-
-          slider.type =
-            "range";
-
-          slider.min =
-            String(MIN_ZOOM);
-
-          slider.max =
-            String(MAX_ZOOM);
-
-          slider.step =
-            "0.5";
-
-          slider.value =
-            String(map.getZoom());
-
-          slider.title =
-            "Map zoom level";
-
-          slider.setAttribute(
-            "aria-label",
-            "Map zoom level"
-          );
-
-          slider.style.width =
-            "105px";
-
-          slider.style.cursor =
-            "pointer";
-
-
-          // Zoom label
-          const zoomLabel =
-            L.DomUtil.create(
-              "div",
-              "",
-              container
-            );
-
-          zoomLabel.style.textAlign =
-            "center";
-
-          zoomLabel.style.fontSize =
-            "11px";
-
-          zoomLabel.style.fontWeight =
-            "600";
-
-          zoomLabel.style.color =
-            "#4b5563";
-
-          zoomLabel.style.marginTop =
-            "3px";
-
-
-          const updateLabel =
-            () => {
-              const zoom =
-                map.getZoom();
-
-              slider.value =
-                String(zoom);
-
-              zoomLabel.textContent =
-                `Zoom ${zoom.toFixed(1)}`;
-            };
-
-
-          updateLabel();
-
-
-          L.DomEvent.disableClickPropagation(
-            container
-          );
-
-
-          L.DomEvent.on(
-            slider,
-            "input",
-            (event) => {
-              const zoom =
-                Number(
-                  event.target.value
-                );
-
-              map.setZoom(
-                zoom,
-                {
-                  animate: false
-                }
-              );
-            }
-          );
-
-
-          map.on(
-            "zoomend",
-            updateLabel
-          );
-
-
-          container._cleanup =
-            () => {
-              map.off(
-                "zoomend",
-                updateLabel
-              );
-            };
-
-
-          return container;
-        },
-
-
-        onRemove() {
-          const container =
-            this.getContainer();
-
-          if (
-            container?._cleanup
-          ) {
-            container._cleanup();
-          }
-        }
-      });
-
-
-    const control =
-      new ZoomSliderControl();
-
-    map.addControl(control);
-
-
-    return () => {
-      map.removeControl(
-        control
+      window.clearTimeout(timer);
+      window.removeEventListener(
+        "resize",
+        invalidate
       );
     };
   }, [map]);
@@ -804,209 +273,131 @@ function ZoomSlider() {
   return null;
 }
 
-
-// =====================================================
-// MAP SCALE
-// =====================================================
-
-function MapScale() {
-  const map = useMap();
-
-  useEffect(() => {
-    const scale =
-      L.control.scale({
-        position: "bottomleft",
-        imperial: false,
-        metric: true,
-        maxWidth: 120
-      });
-
-    scale.addTo(map);
-
-    return () => {
-      map.removeControl(
-        scale
-      );
-    };
-  }, [map]);
-
-  return null;
-}
-
-
-// =====================================================
-// FIELD MARKERS
-// =====================================================
 
 function FieldMarkers({
   geojson,
   onFieldSelect
 }) {
-  const markers =
-    useMemo(() => {
-      if (
-        !geojson ||
-        !geojson.features
-      ) {
-        return [];
-      }
+  const markers = useMemo(() => {
+    const features =
+      geojson?.features || [];
 
-      const result = [];
+    return features.flatMap(
+      (feature, index) => {
+        try {
+          const bounds =
+            L.geoJSON(
+              feature
+            ).getBounds();
 
-      geojson.features.forEach(
-        (feature, index) => {
-          try {
-            const layer =
-              L.geoJSON(feature);
-
-            const bounds =
-              layer.getBounds();
-
-            if (
-              !bounds.isValid()
-            ) {
-              return;
-            }
-
-            const center =
-              bounds.getCenter();
-
-            const fieldId =
-              getFieldId(
-                feature,
-                index
-              );
-
-            const category =
-              getCategory(
-                feature
-              );
-
-            const transition =
-              isTransitionCandidate(
-                feature
-              );
-
-            result.push({
-              fieldId,
-              center,
-              category,
-              transition
-            });
-          } catch (error) {
-            console.error(
-              "Failed to create field marker:",
-              error
-            );
+          if (!bounds.isValid()) {
+            return [];
           }
+
+          return [
+            {
+              fieldId:
+                getFieldId(
+                  feature,
+                  index
+                ),
+              displayFieldNumber:
+                getDisplayFieldNumber(
+                  feature,
+                  index
+                ),
+              center:
+                bounds.getCenter(),
+              category:
+                getCategory(
+                  feature
+                ),
+              transition:
+                isTransitionCandidate(
+                  feature
+                )
+            }
+          ];
+        } catch (error) {
+          console.error(
+            "Failed to create field marker:",
+            error
+          );
+          return [];
         }
-      );
-
-      return result;
-    }, [geojson]);
-
+      }
+    );
+  }, [geojson]);
 
   return (
     <>
-      {markers.map(
-        (marker) => {
-          const categoryStyle =
-            getCategoryStyle(
-              marker.category
-            );
-
-          const markerBorder =
-            marker.transition
-              ? "#eab308"
-              : "white";
-
-
-          const icon =
-            L.divIcon({
-              className:
-                "field-number-marker",
-
-              html: `
-                <div
-                  style="
-                    width: 28px;
-                    height: 28px;
-                    border-radius: 50%;
-                    background: ${categoryStyle.fillColor};
-                    color: white;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 10px;
-                    font-weight: 700;
-                    border: 3px solid ${markerBorder};
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-                    white-space: nowrap;
-                  "
-                >
-                  ${marker.fieldId}
-                </div>
-              `,
-
-              iconSize: [
-                28,
-                28
-              ],
-
-              iconAnchor: [
-                14,
-                14
-              ]
-            });
-
-
-          return (
-            <Marker
-              key={`marker-${marker.fieldId}`}
-              position={
-                marker.center
-              }
-              icon={icon}
-              eventHandlers={{
-                click: (
-                  event
-                ) => {
-                  const map =
-                    event.target._map;
-
-                  map.setView(
-                    marker.center,
-                    17,
-                    {
-                      animate: true
-                    }
-                  );
-
-                  onFieldSelect(
-                    marker.fieldId
-                  );
-                }
-              }}
-            />
+      {markers.map((marker) => {
+        const categoryStyle =
+          getCategoryStyle(
+            marker.category
           );
-        }
-      )}
+
+        const icon =
+          L.divIcon({
+            className:
+              "parali-map-marker-shell",
+            html: `
+              <div
+                class="parali-map-marker ${
+                  marker.transition
+                    ? "is-transition"
+                    : ""
+                }"
+                style="
+                  --marker-fill:${categoryStyle.fillColor};
+                "
+              >
+                <span>
+                  ${marker.displayFieldNumber}
+                </span>
+              </div>
+            `,
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
+          });
+
+        return (
+          <Marker
+            key={`marker-${marker.fieldId}`}
+            position={marker.center}
+            icon={icon}
+            eventHandlers={{
+              click: (event) => {
+                const map =
+                  event.target._map;
+
+                map.setView(
+                  marker.center,
+                  17,
+                  {
+                    animate: true
+                  }
+                );
+
+                onFieldSelect(
+                  marker.displayFieldNumber
+                );
+              }
+            }}
+          />
+        );
+      })}
     </>
   );
 }
 
-
-// =====================================================
-// FIELD MAP
-// =====================================================
 
 function FieldMap({
   geojson,
   onFieldSelect
 }) {
   if (
-    !geojson ||
-    !geojson.features
+    !geojson?.features
   ) {
     return (
       <div className="map-loading">
@@ -1014,11 +405,6 @@ function FieldMap({
       </div>
     );
   }
-
-
-  // ===================================================
-  // FIELD INTERACTION
-  // ===================================================
 
   const onEachField = (
     feature,
@@ -1035,35 +421,23 @@ function FieldMap({
         index
       );
 
-    const category =
-      getCategory(
-        feature
+    const displayFieldNumber =
+      getDisplayFieldNumber(
+        feature,
+        index
       );
+
+    const category =
+      getCategory(feature);
 
     const fieldStatus =
-      getFieldStatus(
-        feature
-      );
+      getFieldStatus(feature);
 
     const candidateDate =
-      getCandidateDate(
-        feature
-      );
+      getCandidateDate(feature);
 
-    const ndviTrend =
-      getNdviTrend(
-        feature
-      );
-
-    const nbrTrend =
-      getNbrTrend(
-        feature
-      );
-
-    const transition =
-      isTransitionCandidate(
-        feature
-      );
+    const indicators =
+      getIndicators(feature);
 
     const baseStyle =
       getCategoryStyle(
@@ -1076,108 +450,75 @@ function FieldMap({
         feature
       );
 
-
-    // Initial polygon style
     layer.setStyle(
       mapStyle
     );
 
+    layer.bindPopup(
+      `
+        <div class="parali-map-popup">
+          <div class="map-popup-kicker">
+            FIELD ANALYSIS
+          </div>
 
-    // =================================================
-    // POPUP
-    // =================================================
-
-    layer.bindPopup(`
-      <div style="
-        min-width: 220px;
-        line-height: 1.55;
-      ">
-
-        <div style="
-          font-size: 16px;
-          font-weight: 700;
-          margin-bottom: 6px;
-        ">
-          Field ${fieldId}
-        </div>
-
-        <div>
-          Category:
           <strong>
-            ${category}
+            Field ${displayFieldNumber}
           </strong>
+
+          <div class="map-popup-meta">
+            <span>Source</span>
+            <b>${fieldId}</b>
+          </div>
+
+          <div class="map-popup-meta">
+            <span>Year</span>
+            <b>${getSourceYear(feature) || "N/A"}</b>
+          </div>
+
+          <div class="map-popup-meta">
+            <span>Category</span>
+            <b>${category}</b>
+          </div>
+
+          <div class="map-popup-meta">
+            <span>NDVI trend</span>
+            <b>${indicators.ndvi_trend || "N/A"}</b>
+          </div>
+
+          <div class="map-popup-meta">
+            <span>NBR trend</span>
+            <b>${indicators.nbr_trend || "N/A"}</b>
+          </div>
+
+          <div class="map-popup-status ${
+            isTransitionCandidate(
+              feature
+            )
+              ? "is-transition"
+              : ""
+          }">
+            ${
+              candidateDate
+                ? `Transition candidate · ${candidateDate}`
+                : fieldStatus || "Monitoring active"
+            }
+          </div>
+
+          <div class="map-popup-hint">
+            Click to open full field analysis.
+          </div>
         </div>
-
-        <div>
-          Field status:
-          <strong>
-            ${fieldStatus}
-          </strong>
-        </div>
-
-        <div>
-          NDVI trend:
-          <strong>
-            ${ndviTrend || "N/A"}
-          </strong>
-        </div>
-
-        <div>
-          NBR trend:
-          <strong>
-            ${nbrTrend || "N/A"}
-          </strong>
-        </div>
-
-        <div>
-          Candidate transition:
-          <strong>
-            ${candidateDate || "Not detected"}
-          </strong>
-        </div>
-
-        ${
-          transition
-            ? `
-              <div style="
-                margin-top: 8px;
-                padding: 6px 8px;
-                border-radius: 6px;
-                background: #fef3c7;
-                color: #92400e;
-                font-weight: 600;
-              ">
-                🟡 Crop-transition candidate
-              </div>
-            `
-            : ""
-        }
-
-        <div style="
-          margin-top: 8px;
-          color: #6b7280;
-          font-size: 12px;
-        ">
-          Click field to open satellite analysis.
-        </div>
-
-      </div>
-    `);
-
-
-    // =================================================
-    // MOUSE EVENTS
-    // =================================================
+      `
+    );
 
     layer.on({
-
       mouseover: (event) => {
         event.target.setStyle({
-          color: "#111827",
+          color: "#f4ffdd",
           weight: 4,
           fillColor:
             baseStyle.fillColor,
-          fillOpacity: 0.55
+          fillOpacity: 0.48
         });
 
         if (
@@ -1189,13 +530,11 @@ function FieldMap({
         }
       },
 
-
       mouseout: (event) => {
         event.target.setStyle(
           mapStyle
         );
       },
-
 
       click: (event) => {
         const map =
@@ -1204,19 +543,12 @@ function FieldMap({
         const bounds =
           event.target.getBounds();
 
-        if (
-          bounds.isValid()
-        ) {
+        if (bounds.isValid()) {
           map.fitBounds(
             bounds,
             {
-              padding: [
-                50,
-                50
-              ],
-
+              padding: [48, 48],
               maxZoom: 17,
-
               animate: true
             }
           );
@@ -1225,17 +557,11 @@ function FieldMap({
         event.target.openPopup();
 
         onFieldSelect(
-          fieldId
+          displayFieldNumber
         );
       }
-
     });
   };
-
-
-  // ===================================================
-  // MAP
-  // ===================================================
 
   return (
     <MapContainer
@@ -1243,61 +569,36 @@ function FieldMap({
         30.0,
         75.0
       ]}
-
       zoom={10}
-
-      minZoom={8}
-
-      maxZoom={18}
-
-      // We use our own controls
-      zoomControl={false}
-
-      // Mouse wheel
       scrollWheelZoom={true}
-
-      // Double click
-      doubleClickZoom={true}
-
-      // Mouse dragging
-      dragging={true}
-
-      // Touch pinch
-      touchZoom={true}
-
-      // Shift + drag
-      boxZoom={true}
-
-      // Keyboard arrows / +/- keys
-      keyboard={true}
-
-      // Smoother zoom
-      zoomSnap={0.5}
-
-      zoomDelta={1}
-
-      wheelPxPerZoomLevel={100}
-
-      zoomAnimation={true}
-
-      markerZoomAnimation={true}
-
       className="field-map"
     >
+      <ResizeMap />
 
-      {/* ==============================================
-          BASE MAP
-      ============================================== */}
+      <LayersControl
+        position="topright"
+      >
+        <LayersControl.BaseLayer
+          checked={true}
+          name="Satellite"
+        >
+          <TileLayer
+            attribution="Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />
+        </LayersControl.BaseLayer>
 
-      <TileLayer
-        attribution="&copy; OpenStreetMap contributors"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-
-
-      {/* ==============================================
-          FIELD POLYGONS
-      ============================================== */}
+        <LayersControl.BaseLayer
+          name="Street Map"
+        >
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
+          />
+        </LayersControl.BaseLayer>
+      </LayersControl>
 
       <GeoJSON
         data={geojson}
@@ -1306,11 +607,6 @@ function FieldMap({
         }
       />
 
-
-      {/* ==============================================
-          FIELD NUMBER MARKERS
-      ============================================== */}
-
       <FieldMarkers
         geojson={geojson}
         onFieldSelect={
@@ -1318,28 +614,11 @@ function FieldMap({
         }
       />
 
-
-      {/* ==============================================
-          MAP UTILITIES
-      ============================================== */}
-
-      <MapSizeFix />
-
       <FitBounds
         geojson={geojson}
       />
-
-      <MapControls
-        geojson={geojson}
-      />
-
-      <ZoomSlider />
-
-      <MapScale />
-
     </MapContainer>
   );
 }
-
 
 export default FieldMap;

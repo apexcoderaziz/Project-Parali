@@ -53,6 +53,24 @@ function IntelligencePanel({
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   };
 
+  const formatFieldNumber = (fieldId) => {
+    if (!fieldId) return "Unknown";
+
+    const value = String(fieldId);
+
+    // Convert IDs such as:
+    // 2021_44 -> 44
+    // 2020_34 -> 34
+    // Keep other IDs unchanged.
+    const match = value.match(/_(\d+)$/);
+
+    if (match) {
+      return match[1];
+    }
+
+    return value;
+  };
+
   return (
     <div className="intelligence-panel">
       <div className="intelligence-summary">
@@ -134,7 +152,8 @@ function IntelligencePanel({
                 <div className="priority-field-main">
                   <div className="priority-field-id">
                     <span className="priority-dot"></span>
-                    Field {field.fieldId}
+
+                    Field {formatFieldNumber(field.fieldId)}
                   </div>
 
                   <span className="priority-score">
@@ -154,12 +173,6 @@ function IntelligencePanel({
                   <span>
                     NBR {formatTrend(field.nbrTrend)}
                   </span>
-
-                  {field.candidateDate && (
-                    <span>
-                      Candidate {field.candidateDate}
-                    </span>
-                  )}
                 </div>
 
                 <ChevronRight
@@ -175,6 +188,7 @@ function IntelligencePanel({
 
             <div>
               <strong>No priority fields available</strong>
+
               <p>
                 Field intelligence will appear when indicator data
                 is available.

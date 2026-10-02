@@ -24,6 +24,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from .field_grouping import combined_geometry, group_summary, load_field_features, resolve_field_ids
+
 import ee
 import pandas as pd
 
@@ -65,22 +67,9 @@ def _initialize_earth_engine() -> None:
 
 
 def _load_field_geometry(field_id: str) -> dict[str, Any]:
-    if not GEOJSON_PATH.exists():
-        raise FileNotFoundError(f"Sangrur GeoJSON not found: {GEOJSON_PATH}")
+    """Load the selected field geometry, combining all matching source years."""
 
-    with GEOJSON_PATH.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
-
-    for feature in data.get("features", []):
-        properties = feature.get("properties") or {}
-        candidate = properties.get("field_id") or properties.get("id")
-        if str(candidate).strip() == str(field_id).strip():
-            geometry = feature.get("geometry")
-            if not geometry:
-                raise ValueError(f"Field {field_id} has no geometry")
-            return geometry
-
-    raise KeyError(f"Field '{field_id}' was not found in Sangrur GeoJSON")
+    return combined_geometry(field_id, str(GEOJSON_PATH))
 
 
 def _mask_and_indices(image: ee.Image) -> ee.Image:
@@ -215,13 +204,21 @@ def _fetch_current_series(field_id: str) -> list[dict[str, Any]]:
     ]
 
 
-def _historical_candidate_days() -> list[int]:
+def _historical_candidate_days(field_id: str | None = None) -> list[int]:
+    """Load historical candidate timing for the selected source field group."""
+
     if not HARVEST_WINDOW_PATH.exists():
         return []
 
     df = pd.read_csv(HARVEST_WINDOW_PATH)
     if "candidate_date" not in df.columns:
         return []
+
+    if field_id is not None and "field_id" in df.columns:
+        source_ids = set(resolve_field_ids(field_id, str(GEOJSON_PATH)))
+        if source_ids:
+            df["field_id"] = df["field_id"].astype(str).str.strip()
+            df = df[df["field_id"].isin(source_ids)]
 
     dates = pd.to_datetime(df["candidate_date"], errors="coerce").dropna()
     return [int(value.dayofyear) for value in dates]
@@ -397,7 +394,8 @@ def predict_harvest(field_id: str) -> dict[str, Any]:
     series = _fetch_current_series(normalized_id)
     signals = _score_current_signals(series)
 
-    historical_days = _historical_candidate_days()
+    historical_days = _historical_candidate_days(normalized_id)
+    field_group = group_summary(normalized_id, str(GEOJSON_PATH))
     today = date.today()
     current_day = today.timetuple().tm_yday
 
@@ -487,6 +485,9 @@ def predict_harvest(field_id: str) -> dict[str, Any]:
     return {
         "success": True,
         "field_id": normalized_id,
+        "source_field_ids": field_group["source_field_ids"],
+        "source_field_count": field_group["source_field_count"],
+        "geometry_mode": field_group["geometry_mode"],
         "prediction_type": "live satellite harvest likelihood",
         "harvest_likelihood": signals["label"],
         "signal_strength": signals["score"],
@@ -524,6 +525,8 @@ def predict_harvest(field_id: str) -> dict[str, Any]:
         "data_source": {
             "current": COLLECTION,
             "historical": str(HARVEST_WINDOW_PATH.relative_to(BASE_DIR)),
+            "source_field_ids": field_group["source_field_ids"],
+            "geometry_mode": field_group["geometry_mode"],
             "lookback_days": LOOKBACK_DAYS,
             "max_cloud_percent": MAX_CLOUD_PERCENT,
         },

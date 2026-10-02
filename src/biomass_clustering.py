@@ -22,6 +22,11 @@ import os
 from collections import deque
 from typing import Any, Dict, List, Optional
 
+try:
+    from .field_grouping import group_summary, resolve_field_ids
+except ImportError:
+    from field_grouping import group_summary, resolve_field_ids
+
 
 # ============================================================
 # CONFIGURATION
@@ -168,22 +173,19 @@ def _geometry_centroid(geometry: Optional[Dict[str, Any]]):
     }
 
 
-# ============================================================
-# GEOMETRY AREA FALLBACK
-# ============================================================
-
 def _ring_area_m2(ring: Any) -> float:
     """
     Approximate a GeoJSON polygon-ring area in square metres using a
     local equirectangular projection.
 
-    This is a fallback only. If area_hectares already exists in the
-    field metadata, that value is preferred.
+    This is a fallback only. Existing field metadata is preferred when
+    it contains a valid positive area.
     """
     if not isinstance(ring, list) or len(ring) < 3:
         return 0.0
 
     points = []
+
     for point in ring:
         if (
             isinstance(point, list)
@@ -217,6 +219,7 @@ def _ring_area_m2(ring: Any) -> float:
     ]
 
     area = 0.0
+
     for i in range(len(projected)):
         x1, y1 = projected[i]
         x2, y2 = projected[(i + 1) % len(projected)]
@@ -225,12 +228,13 @@ def _ring_area_m2(ring: Any) -> float:
     return abs(area) / 2.0
 
 
-def _geometry_area_m2(geometry: Optional[Dict[str, Any]]) -> float:
+def _geometry_area_m2(
+    geometry: Optional[Dict[str, Any]],
+) -> float:
     """
     Calculate approximate Polygon/MultiPolygon area in square metres.
 
-    For MultiPolygon, polygon parts are summed. For each polygon,
-    the outer ring area is reduced by inner-ring (hole) areas.
+    Polygon holes are subtracted. MultiPolygon parts are summed.
     """
     if not geometry:
         return 0.0
@@ -247,13 +251,14 @@ def _geometry_area_m2(geometry: Optional[Dict[str, Any]]) -> float:
             _ring_area_m2(ring)
             for ring in coordinates[1:]
         )
+
         return max(0.0, outer - holes)
 
     if geometry_type == "MultiPolygon":
-        total = 0.0
-
         if not isinstance(coordinates, list):
             return 0.0
+
+        total = 0.0
 
         for polygon in coordinates:
             if not isinstance(polygon, list) or not polygon:
@@ -264,6 +269,7 @@ def _geometry_area_m2(geometry: Optional[Dict[str, Any]]) -> float:
                 _ring_area_m2(ring)
                 for ring in polygon[1:]
             )
+
             total += max(0.0, outer - holes)
 
         return total
@@ -345,10 +351,6 @@ def load_fields(
             {},
         )
 
-        # Prefer the existing enriched field area. If the GeoJSON being
-        # used at runtime is the raw source without field_indicators,
-        # calculate area directly from the polygon geometry instead of
-        # silently turning the field into a zero-biomass field.
         area_hectares = _safe_float(
             indicators.get(
                 "area_hectares"
@@ -361,11 +363,19 @@ def load_fields(
             ),
         )
 
+        # IMPORTANT:
+        # Some runtime GeoJSON records do not contain the enriched
+        # area metadata even though their polygon geometry is valid.
+        # Never silently turn such fields into zero-biomass members.
         if area_hectares <= 0:
             area_m2 = _geometry_area_m2(
                 geometry
             )
-            area_hectares = area_m2 / 10_000.0
+            area_hectares = (
+                area_m2 / 10_000.0
+                if area_m2 > 0
+                else 0.0
+            )
 
         biomass = _estimate_biomass(
             area_hectares
@@ -773,20 +783,153 @@ def get_field_cluster(
     truck_capacity_tonnes: float = DEFAULT_TRUCK_CAPACITY_TONNES,
     geojson_path: str = GEOJSON_PATH,
 ) -> Dict[str, Any]:
-    """Return the collection cluster containing one field."""
+    """Return the collection cluster for one source field or logical field group."""
 
     fields = load_fields(
         geojson_path
     )
 
-    target_id = str(field_id)
+    target_id = str(field_id).strip()
+    source_ids = resolve_field_ids(target_id, geojson_path)
+
+    # Logical-field behavior: a request such as "34" combines all
+    # resolved source-year cluster results while keeping each source
+    # field's real spatial cluster intact. A logical field with only one
+    # source-year record (for example 343 -> 2021_343) is returned through
+    # the same aggregation path without inventing another year.
+    if target_id not in source_ids and source_ids:
+        source_clusters = []
+
+        for source_id in source_ids:
+            source_clusters.append(
+                get_field_cluster(
+                    field_id=source_id,
+                    radius_km=radius_km,
+                    truck_capacity_tonnes=truck_capacity_tonnes,
+                    geojson_path=geojson_path,
+                )
+            )
+
+        combined_field_ids = []
+        combined_members = []
+        seen_ids = set()
+        total_area = 0.0
+        total_gross = 0.0
+        total_recoverable = 0.0
+        centroid_weight = 0.0
+        weighted_lat = 0.0
+        weighted_lon = 0.0
+
+        for source_result in source_clusters:
+            cluster = source_result.get("collection_cluster") or {}
+            total_area += float(cluster.get("total_area_hectares", 0.0))
+            total_gross += float(cluster.get("gross_residue_tonnes", 0.0))
+            total_recoverable += float(
+                cluster.get("recoverable_biomass_tonnes", 0.0)
+            )
+
+            cluster_centroid = cluster.get("collection_centroid") or {}
+            weight = max(0.0, float(cluster.get("recoverable_biomass_tonnes", 0.0)))
+            if weight > 0 and cluster_centroid.get("latitude") is not None:
+                centroid_weight += weight
+                weighted_lat += float(cluster_centroid["latitude"]) * weight
+                weighted_lon += float(cluster_centroid["longitude"]) * weight
+
+            for member_id in cluster.get("field_ids", []):
+                member_id = str(member_id)
+                if member_id not in seen_ids:
+                    seen_ids.add(member_id)
+                    combined_field_ids.append(member_id)
+
+            combined_members.extend(cluster.get("members") or [])
+
+        combined_members.sort(
+            key=lambda member: str(member.get("field_id", ""))
+        )
+
+        combined_cluster = {
+            "cluster_id": f"group_{target_id}",
+            "radius_km": radius_km,
+            "field_count": len(combined_field_ids),
+            "field_ids": combined_field_ids,
+            "total_area_hectares": total_area,
+            "total_area_acres": total_area * 2.47105,
+            "gross_residue_tonnes": total_gross,
+            "recoverable_biomass_tonnes": total_recoverable,
+            "estimated_truckloads": (
+                math.ceil(total_recoverable / truck_capacity_tonnes)
+                if total_recoverable > 0
+                else 0
+            ),
+            "truck_capacity_tonnes": truck_capacity_tonnes,
+            "collection_centroid": (
+                {
+                    "latitude": weighted_lat / centroid_weight,
+                    "longitude": weighted_lon / centroid_weight,
+                }
+                if centroid_weight > 0
+                else None
+            ),
+            "members": combined_members,
+            "member_clusters": [
+                result.get("collection_cluster")
+                for result in source_clusters
+            ],
+            "aggregation_note": (
+                "The logical field combines the independent source-year collection clusters. "
+                "The subclusters remain spatially separate; no artificial cross-year adjacency is created."
+            ),
+        }
+
+        summary = group_summary(target_id, geojson_path)
+
+        source_recoverable = sum(
+            float(
+                (result.get("aggregation_effect") or {}).get(
+                    "individual_field_recoverable_tonnes",
+                    0.0,
+                )
+            )
+            for result in source_clusters
+        )
+
+        return {
+            "success": True,
+            "field_id": target_id,
+            "field": {
+                "field_id": target_id,
+                "field_name": f"Logical Field {target_id}",
+                "category": "combined_source_year_group",
+                "source_field_ids": summary["source_field_ids"],
+            },
+            "collection_cluster": combined_cluster,
+            "cluster_radius_km": radius_km,
+            "truck_capacity_tonnes": truck_capacity_tonnes,
+            "source_field_ids": summary["source_field_ids"],
+            "source_field_count": summary["source_field_count"],
+            "member_clusters": source_clusters,
+            "aggregation_effect": {
+                "individual_field_recoverable_tonnes": source_recoverable,
+                "cluster_recoverable_tonnes": total_recoverable,
+                "additional_fields_aggregated": max(
+                    0,
+                    len(combined_field_ids) - len(source_ids),
+                ),
+                "estimated_truckloads": combined_cluster["estimated_truckloads"],
+            },
+            "validation_note": (
+                "Collection clusters are an MVP planning model. For a logical multi-year field, "
+                "each source-year geometry is clustered independently and the resulting supplies "
+                "are aggregated; this does not confirm farmer participation, collection routes, "
+                "road distances, or transporter capacity."
+            ),
+        }
 
     target = next(
         (
             field
             for field in fields
-            if str(field["field_id"])
-            == target_id
+            if str(field["field_id"]) == target_id
         ),
         None,
     )
@@ -856,11 +999,9 @@ def get_field_cluster(
             ),
         },
         "validation_note": (
-            "Aggregation reduces the small-load "
-            "problem conceptually by combining nearby "
-            "fields. It does not confirm that farmers "
-            "will participate or that a single truck "
-            "will collect the entire cluster."
+            "Aggregation reduces the small-load problem conceptually by combining nearby fields. "
+            "It does not confirm that farmers will participate or that a single truck will collect "
+            "the entire cluster."
         ),
     }
 

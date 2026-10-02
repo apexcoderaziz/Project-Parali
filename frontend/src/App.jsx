@@ -5,25 +5,31 @@ import {
 } from "react";
 
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ScatterChart,
-  Scatter,
-  ZAxis
-} from "recharts";
+  Activity,
+  ArrowDownRight,
+  ArrowUpRight,
+  CalendarDays,
+  ChevronRight,
+  Crosshair,
+  Leaf,
+  LocateFixed,
+  MapPinned,
+  Radio,
+  ScanSearch,
+  Satellite,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Waves,
+  Wheat,
+  X
+} from "lucide-react";
 
 import "./styles.css";
 
 import FieldMap from "./FieldMap.jsx";
-
-import DashboardCards from "./components/DashboardCards.jsx";
-import IntelligencePanel from "./components/IntelligencePanel.jsx";
 import FieldDrawer from "./components/FieldDrawer.jsx";
 import MapLegend from "./components/MapLegend.jsx";
 import BurnDetector from "./components/BurnDetector.jsx";
@@ -32,29 +38,35 @@ const API_URL = "http://127.0.0.1:8000";
 
 
 function FieldAreaDeclineChart({ data }) {
-  const points = Array.isArray(data) ? data.filter(
-    (point) =>
-      Number.isFinite(Number(point?.area)) &&
-      Number.isFinite(Number(point?.decline))
-  ) : [];
+  const points = Array.isArray(data)
+    ? data.filter(
+        (point) =>
+          Number.isFinite(Number(point?.area)) &&
+          Number.isFinite(Number(point?.decline))
+      )
+    : [];
 
   if (points.length === 0) {
     return (
-      <div className="chart-empty-state">
-        <strong>No valid field trend data available.</strong>
-        <span>Area and NDVI-decline values are required for this chart.</span>
+      <div className="signal-chart-empty">
+        <Waves size={20} />
+        <strong>Signal landscape is waiting for data.</strong>
+        <span>
+          Area and NDVI-decline indicators will appear here when the field
+          dataset is available.
+        </span>
       </div>
     );
   }
 
   const width = 900;
-  const height = 360;
-  const margin = { top: 24, right: 28, bottom: 58, left: 68 };
+  const height = 330;
+  const margin = { top: 28, right: 24, bottom: 54, left: 60 };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
-  const areas = points.map((p) => Number(p.area));
-  const declines = points.map((p) => Number(p.decline));
+  const areas = points.map((point) => Number(point.area));
+  const declines = points.map((point) => Number(point.decline));
 
   const rawMinX = Math.min(...areas);
   const rawMaxX = Math.max(...areas);
@@ -70,32 +82,67 @@ function FieldAreaDeclineChart({ data }) {
   const maxY = rawMaxY + yPadding;
 
   const xScale = (value) =>
-    margin.left + ((value - minX) / Math.max(maxX - minX, 0.0001)) * innerWidth;
+    margin.left +
+    ((value - minX) / Math.max(maxX - minX, 0.0001)) *
+      innerWidth;
 
   const yScale = (value) =>
-    margin.top + innerHeight - ((value - minY) / Math.max(maxY - minY, 0.0001)) * innerHeight;
+    margin.top +
+    innerHeight -
+    ((value - minY) / Math.max(maxY - minY, 0.0001)) *
+      innerHeight;
 
   const tickCount = 5;
-  const xTicks = Array.from({ length: tickCount }, (_, index) =>
-    minX + ((maxX - minX) * index) / (tickCount - 1)
+
+  const xTicks = Array.from(
+    { length: tickCount },
+    (_, index) =>
+      minX +
+      ((maxX - minX) * index) /
+        (tickCount - 1)
   );
-  const yTicks = Array.from({ length: tickCount }, (_, index) =>
-    minY + ((maxY - minY) * index) / (tickCount - 1)
+
+  const yTicks = Array.from(
+    { length: tickCount },
+    (_, index) =>
+      minY +
+      ((maxY - minY) * index) /
+        (tickCount - 1)
   );
 
   return (
-    <div className="scatter-chart-frame" style={{ width: "100%", height: "360px" }}>
+    <div className="signal-scatter-shell">
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
         height="100%"
         role="img"
-        aria-label="Field area versus NDVI decline scatter plot"
+        aria-label="Field area versus NDVI decline"
       >
-        <rect x="0" y="0" width={width} height={height} fill="#ffffff" />
+        <defs>
+          <linearGradient
+            id="signalGlow"
+            x1="0"
+            y1="0"
+            x2="1"
+            y2="1"
+          >
+            <stop offset="0%" stopColor="#d8ff65" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#55e3a4" stopOpacity="0.35" />
+          </linearGradient>
+        </defs>
+
+        <rect
+          x="0"
+          y="0"
+          width={width}
+          height={height}
+          fill="transparent"
+        />
 
         {yTicks.map((tick, index) => {
           const y = yScale(tick);
+
           return (
             <g key={`y-${index}`}>
               <line
@@ -103,15 +150,15 @@ function FieldAreaDeclineChart({ data }) {
                 x2={width - margin.right}
                 y1={y}
                 y2={y}
-                stroke="#e5e7eb"
-                strokeDasharray="3 3"
+                stroke="rgba(148,163,184,0.18)"
+                strokeDasharray="4 6"
               />
               <text
                 x={margin.left - 10}
                 y={y + 4}
                 textAnchor="end"
                 fontSize="11"
-                fill="#64748b"
+                fill="#90a39a"
               >
                 {tick.toFixed(2)}
               </text>
@@ -121,6 +168,7 @@ function FieldAreaDeclineChart({ data }) {
 
         {xTicks.map((tick, index) => {
           const x = xScale(tick);
+
           return (
             <g key={`x-${index}`}>
               <line
@@ -128,14 +176,14 @@ function FieldAreaDeclineChart({ data }) {
                 x2={x}
                 y1={margin.top}
                 y2={height - margin.bottom}
-                stroke="#f1f5f9"
+                stroke="rgba(148,163,184,0.10)"
               />
               <text
                 x={x}
-                y={height - margin.bottom + 22}
+                y={height - margin.bottom + 20}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#64748b"
+                fill="#90a39a"
               >
                 {tick.toFixed(2)}
               </text>
@@ -148,47 +196,58 @@ function FieldAreaDeclineChart({ data }) {
           x2={width - margin.right}
           y1={height - margin.bottom}
           y2={height - margin.bottom}
-          stroke="#94a3b8"
+          stroke="rgba(180,197,188,0.42)"
         />
+
         <line
           x1={margin.left}
           x2={margin.left}
           y1={margin.top}
           y2={height - margin.bottom}
-          stroke="#94a3b8"
+          stroke="rgba(180,197,188,0.42)"
         />
 
         {points.map((point, index) => {
           const area = Number(point.area);
           const decline = Number(point.decline);
-          const x = xScale(area);
-          const y = yScale(decline);
 
           return (
-            <circle
+            <g
               key={`${point.fieldId}-${index}`}
-              cx={x}
-              cy={y}
-              r="4.5"
-              fill="#166534"
-              fillOpacity="0.72"
-              stroke="#14532d"
-              strokeWidth="1"
+              className="signal-point"
             >
-              <title>
-                {`Field ${point.fieldId} | Area: ${area.toFixed(4)} ha | NDVI decline: ${decline.toFixed(4)}`}
-              </title>
-            </circle>
+              <circle
+                cx={xScale(area)}
+                cy={yScale(decline)}
+                r="9"
+                fill="#d8ff65"
+                fillOpacity="0.06"
+              />
+              <circle
+                cx={xScale(area)}
+                cy={yScale(decline)}
+                r="4.2"
+                fill="url(#signalGlow)"
+                stroke="#e9ffb4"
+                strokeWidth="1"
+              >
+                <title>
+                  {`Field ${point.fieldId} · Area ${area.toFixed(
+                    4
+                  )} ha · NDVI decline ${decline.toFixed(4)}`}
+                </title>
+              </circle>
+            </g>
           );
         })}
 
         <text
           x={margin.left + innerWidth / 2}
-          y={height - 10}
+          y={height - 8}
           textAnchor="middle"
           fontSize="12"
           fontWeight="600"
-          fill="#334155"
+          fill="#b8c9c0"
         >
           Field area (ha)
         </text>
@@ -199,8 +258,10 @@ function FieldAreaDeclineChart({ data }) {
           textAnchor="middle"
           fontSize="12"
           fontWeight="600"
-          fill="#334155"
-          transform={`rotate(-90 16 ${margin.top + innerHeight / 2})`}
+          fill="#b8c9c0"
+          transform={`rotate(-90 16 ${
+            margin.top + innerHeight / 2
+          })`}
         >
           NDVI decline
         </text>
@@ -210,89 +271,62 @@ function FieldAreaDeclineChart({ data }) {
 }
 
 
+function formatLabel(value) {
+  if (!value) {
+    return "Unknown";
+  }
+
+  return String(value)
+    .replace(/_/g, " ")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase()
+    );
+}
+
+
+function normalizeCategory(value) {
+  return String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/-/g, "_")
+    .replace(/\s+/g, "_");
+}
+
+
 function App() {
-
-
-  // =====================================================
-  // SATELLITE FIELD ANALYSIS STATE
-  // =====================================================
-
-  // IMPORTANT:
-  // Field IDs are globally unique strings.
-  //
-  // Examples:
-  // 2020_34
-  // 2021_34
-  //
-  // Do NOT convert these IDs to numbers.
-
-  const [fieldId, setFieldId] = useState("2020_1");
-
+  const [fieldId, setFieldId] = useState("");
   const [fieldData, setFieldData] = useState(null);
-  const [residueEstimate, setResidueEstimate] = useState(null);
-  const [residueLoading, setResidueLoading] = useState(false);
-  const [residueError, setResidueError] = useState("");
 
-  const [biomassOpportunity, setBiomassOpportunity] = useState(null);
-  const [biomassOpportunityLoading, setBiomassOpportunityLoading] = useState(false);
-  const [biomassOpportunityError, setBiomassOpportunityError] = useState("");
+  const [harvestPrediction, setHarvestPrediction] =
+    useState(null);
+  const [harvestLoading, setHarvestLoading] =
+    useState(false);
+  const [harvestError, setHarvestError] =
+    useState("");
 
-  const [clusterEstimate, setClusterEstimate] = useState(null);
-  const [clusterLoading, setClusterLoading] = useState(false);
-  const [clusterError, setClusterError] = useState("");
-
-  const [logisticsEstimate, setLogisticsEstimate] = useState(null);
-  const [logisticsLoading, setLogisticsLoading] = useState(false);
-  const [logisticsError, setLogisticsError] = useState("");
-
-  const [fieldLoading, setFieldLoading] = useState(false);
-
-  const [fieldError, setFieldError] = useState("");
-
-  // =====================================================
-  // HARVEST PREDICTION STATE
-  // =====================================================
-
-  const [harvestPrediction, setHarvestPrediction] = useState(null);
-
-  const [harvestLoading, setHarvestLoading] = useState(false);
-
-  const [harvestError, setHarvestError] = useState("");
-
-
-  // =====================================================
-  // FIELD MAP STATE
-  // =====================================================
+  const [fieldLoading, setFieldLoading] =
+    useState(false);
+  const [fieldError, setFieldError] =
+    useState("");
 
   const [geojson, setGeojson] = useState(null);
+  const [mapLoading, setMapLoading] =
+    useState(true);
+  const [mapError, setMapError] =
+    useState("");
 
-  const [mapLoading, setMapLoading] = useState(true);
-
-  const [mapError, setMapError] = useState("");
-
-  // =====================================================
-  // DASHBOARD FILTER STATE
-  // =====================================================
-
-  const [fieldSearch, setFieldSearch] = useState("");
-
-  const [categoryFilter, setCategoryFilter] = useState("all");
-
-
-  // =====================================================
-  // LOAD FIELD MAP
-  // =====================================================
+  const [fieldSearch, setFieldSearch] =
+    useState("");
+  const [categoryFilter, setCategoryFilter] =
+    useState("all");
 
   useEffect(() => {
-
     const loadFields = async () => {
-
       setMapLoading(true);
-
       setMapError("");
 
       try {
-
         const response = await fetch(
           `${API_URL}/fields`
         );
@@ -300,241 +334,35 @@ function App() {
         const data = await response.json();
 
         if (!response.ok) {
-
           throw new Error(
             data.detail ||
-            "Failed to load field map"
+              "Failed to load field map"
           );
-
         }
 
         setGeojson(data);
-
-      } catch (err) {
-
+      } catch (error) {
         console.error(
           "Field map error:",
-          err
+          error
         );
 
         setMapError(
-          err.message
+          error.message ||
+            "Field map unavailable"
         );
-
       } finally {
-
         setMapLoading(false);
-
       }
-
     };
 
     loadFields();
-
   }, []);
 
-
-  // =====================================================
-  // FIELD SATELLITE ANALYSIS
-  // =====================================================
-
-  const analyzeField = async (
-    selectedFieldId = fieldId
-  ) => {
-
-    // ---------------------------------------------------
-    // Normalize the field ID as a STRING.
-    //
-    // This is important because IDs such as:
-    //
-    // 2020_34
-    // 2021_34
-    //
-    // contain an underscore.
-    // ---------------------------------------------------
-
-    const normalizedFieldId = String(
-      selectedFieldId || ""
-    ).trim();
-
-
-    if (!normalizedFieldId) {
-
-      setFieldError(
-        "Please select a field."
-      );
-
-      return;
-    }
-
-
-    setFieldLoading(true);
-
-    setFieldError("");
-
-    setFieldData(null);
-
-
-    // Keep input synchronized
-    // with selected map field.
-
-    setFieldId(
-      normalizedFieldId
-    );
-
-
-    try {
-
-      const encodedFieldId =
-        encodeURIComponent(
-          normalizedFieldId
-        );
-
-
-      const response = await fetch(
-        `${API_URL}/field-analysis/${encodedFieldId}`
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail ||
-          "Field analysis failed"
-        );
-      }
-
-      setFieldData(data);
-
-      // Live harvest assessment is intentionally loaded from the
-      // current Sentinel-2 endpoint instead of the historical
-      // /harvest-prediction endpoint.
-      setHarvestLoading(true);
-      setHarvestError("");
-      setHarvestPrediction(null);
-
-      try {
-        const liveHarvestResponse = await fetch(
-          `${API_URL}/live-harvest-prediction/${encodedFieldId}`
-        );
-
-        const liveHarvestData = await liveHarvestResponse.json();
-
-        if (!liveHarvestResponse.ok) {
-          throw new Error(
-            liveHarvestData.detail ||
-            "Live harvest assessment failed"
-          );
-        }
-
-        setHarvestPrediction(liveHarvestData);
-      } catch (liveHarvestErr) {
-        console.error(
-          "Live harvest assessment error:",
-          liveHarvestErr
-        );
-        setHarvestPrediction(null);
-        setHarvestError(liveHarvestErr.message);
-      } finally {
-        setHarvestLoading(false);
-      }
-
-      // Load residue, biomass cluster, and logistics estimates independently.
-      // A failure in one planning layer should not hide the satellite field analysis.
-      setResidueLoading(true);
-      setResidueError("");
-      setBiomassOpportunityLoading(true);
-      setBiomassOpportunityError("");
-      setClusterLoading(true);
-      setClusterError("");
-      setLogisticsLoading(true);
-      setLogisticsError("");
-      setResidueEstimate(null);
-      setBiomassOpportunity(null);
-      setClusterEstimate(null);
-      setLogisticsEstimate(null);
-
-      const loadPlanningEstimate = async (path, setter, setErrorState, label) => {
-        try {
-          const estimateResponse = await fetch(`${API_URL}${path}`);
-          const estimateData = await estimateResponse.json();
-
-          if (!estimateResponse.ok) {
-            throw new Error(
-              estimateData.detail ||
-              `${label} failed`
-            );
-          }
-
-          setter(estimateData);
-        } catch (estimateErr) {
-          console.error(`${label} error:`, estimateErr);
-          setter(null);
-          setErrorState(estimateErr.message);
-        }
-      };
-
-      await Promise.all([
-        loadPlanningEstimate(
-          `/residue-estimation/${encodedFieldId}`,
-          setResidueEstimate,
-          setResidueError,
-          "Residue estimation"
-        ),
-        loadPlanningEstimate(
-          `/biomass-opportunity/${encodedFieldId}`,
-          setBiomassOpportunity,
-          setBiomassOpportunityError,
-          "Biomass opportunity"
-        ),
-        loadPlanningEstimate(
-          `/biomass-cluster/${encodedFieldId}?radius_km=5&truck_capacity_tonnes=10`,
-          setClusterEstimate,
-          setClusterError,
-          "Biomass cluster estimation"
-        ),
-        loadPlanningEstimate(
-          `/logistics-estimation/${encodedFieldId}`,
-          setLogisticsEstimate,
-          setLogisticsError,
-          "Logistics estimation"
-        )
-      ]);
-
-      setResidueLoading(false);
-      setBiomassOpportunityLoading(false);
-      setClusterLoading(false);
-      setLogisticsLoading(false);
-
-    } catch (err) {
-
-      console.error(
-        "Field analysis error:",
-        err
-      );
-
-
-      setFieldError(
-        err.message
-      );
-
-    } finally {
-
-      setFieldLoading(false);
-
-    }
-
-  };
-
-
-  // =====================================================
-  // LIVE HARVEST PREDICTION
-  // =====================================================
 
   const loadHarvestPrediction = async (
     selectedFieldId
   ) => {
-
     const normalizedFieldId = String(
       selectedFieldId || ""
     ).trim();
@@ -559,361 +387,188 @@ function App() {
       if (!response.ok) {
         throw new Error(
           data.detail ||
-          "Live harvest assessment failed"
+            "Live harvest assessment failed"
         );
       }
 
-      // The live endpoint returns the assessment directly.
       setHarvestPrediction(data);
-
-    } catch (err) {
+    } catch (error) {
       console.error(
         "Live harvest assessment error:",
-        err
+        error
       );
 
       setHarvestPrediction(null);
-      setHarvestError(err.message);
-
+      setHarvestError(
+        error.message ||
+          "Live harvest assessment failed"
+      );
     } finally {
       setHarvestLoading(false);
     }
   };
 
 
-  // =====================================================
-  // FIELD MAP SELECTION
-  // =====================================================
-
-  const handleFieldSelect = (
-    selectedFieldId
+  const analyzeField = async (
+    selectedFieldId = fieldId
   ) => {
-
     const normalizedFieldId = String(
       selectedFieldId || ""
     ).trim();
 
-
     if (!normalizedFieldId) {
-
+      setFieldError(
+        "Enter a logical field number such as 34."
+      );
       return;
-
     }
 
+    setFieldId(normalizedFieldId);
+    setFieldLoading(true);
+    setFieldError("");
+    setFieldData(null);
 
-    setFieldId(
-      normalizedFieldId
-    );
-
-
-    analyzeField(
-      normalizedFieldId
-    );
-
-    // Scroll to field analysis.
-
-    setTimeout(() => {
-
-      const element =
-        document.getElementById(
-          "field-analysis"
+    try {
+      const encodedFieldId =
+        encodeURIComponent(
+          normalizedFieldId
         );
 
+      const response = await fetch(
+        `${API_URL}/field-analysis/${encodedFieldId}`
+      );
 
-      if (element) {
+      const data = await response.json();
 
-        element.scrollIntoView({
-          behavior: "smooth",
-          block: "start"
-        });
-
+      if (!response.ok) {
+        throw new Error(
+          data.detail ||
+            "Field analysis failed"
+        );
       }
 
-    }, 100);
+      setFieldData(data);
 
+      await loadHarvestPrediction(
+        normalizedFieldId
+      );
+    } catch (error) {
+      console.error(
+        "Field analysis error:",
+        error
+      );
+
+      setFieldError(
+        error.message ||
+          "Field analysis failed"
+      );
+    } finally {
+      setFieldLoading(false);
+    }
   };
 
 
-  // =====================================================
-  // FIELD INDICATORS
-  // =====================================================
+  const handleFieldSelect = (
+    selectedFieldId
+  ) => {
+    const sourceFieldId = String(
+      selectedFieldId || ""
+    ).trim();
+
+    if (!sourceFieldId) {
+      return;
+    }
+
+    const logicalMatch =
+      sourceFieldId.match(
+        /^\d{4}_(.+)$/
+      );
+
+    const logicalFieldId = logicalMatch
+      ? logicalMatch[1].trim()
+      : sourceFieldId;
+
+    setFieldId(logicalFieldId);
+
+    analyzeField(logicalFieldId);
+
+    window.setTimeout(() => {
+      document
+        .getElementById("field-analysis")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+    }, 120);
+  };
+
 
   const indicators =
-    fieldData?.field_indicators ||
+    fieldData?.field_indicators || null;
+
+  const latestObservation =
+    harvestPrediction?.latest_observation ||
+    fieldData?.latest_observation ||
     null;
 
 
-  // =====================================================
-  // DASHBOARD STATISTICS + FILTERING
-  // =====================================================
-
   const dashboardStats = useMemo(() => {
-
     const features =
       geojson?.features || [];
 
-    const normalizeCategory = (value) =>
-      String(value || "")
-        .toLowerCase()
-        .trim()
-        .replace(/-/g, "_")
-        .replace(/\s+/g, "_");
-
     const categoryOf = (feature) => {
-
       const properties =
         feature?.properties || {};
 
       return normalizeCategory(
         properties.category ??
-        properties.field_category ??
-        properties.indicators?.category ??
-        properties.field_indicators?.category
+          properties.field_category ??
+          properties.indicators?.category ??
+          properties.field_indicators?.category
       );
-
     };
-
-    const totalFields =
-      features.length;
-
-    const completelyBurnt =
-      features.filter(
-        (feature) =>
-          categoryOf(feature) ===
-          "completely_burnt"
-      ).length;
-
-    const partiallyBurnt =
-      features.filter(
-        (feature) =>
-          categoryOf(feature) ===
-          "partially_burnt"
-      ).length;
-
-    const transitionCandidates =
-      features.filter(
-        (feature) =>
-          normalizeCategory(
-            feature?.properties?.field_status ??
-            feature?.properties?.indicators?.field_status ??
-            feature?.properties?.field_indicators?.field_status
-          ) ===
-          "crop_transition_candidate"
-      ).length;
 
     return {
-      totalFields,
-      completelyBurnt,
-      partiallyBurnt,
-      transitionCandidates
-    };
+      totalFields: features.length,
 
+      completelyBurnt:
+        features.filter(
+          (feature) =>
+            categoryOf(feature) ===
+            "completely_burnt"
+        ).length,
+
+      partiallyBurnt:
+        features.filter(
+          (feature) =>
+            categoryOf(feature) ===
+            "partially_burnt"
+        ).length,
+
+      transitionCandidates:
+        features.filter((feature) => {
+          const status =
+            normalizeCategory(
+              feature?.properties?.field_status ??
+                feature?.properties?.indicators
+                  ?.field_status ??
+                feature?.properties
+                  ?.field_indicators
+                  ?.field_status
+            );
+
+          return (
+            status ===
+            "crop_transition_candidate"
+          );
+        }).length
+    };
   }, [geojson]);
 
 
-  const filteredGeojson = useMemo(() => {
-
-    if (!geojson) {
-      return null;
-    }
-
-    const normalizedSearch =
-      fieldSearch
-        .toLowerCase()
-        .trim();
-
-    const normalizeCategory = (value) =>
-      String(value || "")
-        .toLowerCase()
-        .trim()
-        .replace(/-/g, "_")
-        .replace(/\s+/g, "_");
-
-    const features =
-      (geojson.features || [])
-        .filter((feature) => {
-
-          const properties =
-            feature?.properties || {};
-
-          const id = String(
-            properties.field_id ??
-            properties.id ??
-            ""
-          ).toLowerCase();
-
-          const category =
-            normalizeCategory(
-              properties.category ??
-              properties.field_category ??
-              properties.indicators?.category ??
-              properties.field_indicators?.category
-            );
-
-          const matchesSearch =
-            !normalizedSearch ||
-            id.includes(
-              normalizedSearch
-            );
-
-          const matchesCategory =
-            categoryFilter === "all" ||
-            category ===
-              categoryFilter;
-
-          return (
-            matchesSearch &&
-            matchesCategory
-          );
-
-        });
-
-    return {
-      ...geojson,
-      features
-    };
-
-  }, [
-    geojson,
-    fieldSearch,
-    categoryFilter
-  ]);
-
-
-  const filteredFieldCount =
-    filteredGeojson?.features?.length || 0;
-
-
-  // =====================================================
-  // FIELD MONITORING TABLE
-  // =====================================================
-
-  const monitoringFields = useMemo(() => {
-
-    const features = geojson?.features || [];
-
-    const normalizeCategory = (value) =>
-      String(value || "")
-        .toLowerCase()
-        .trim()
-        .replace(/-/g, "_")
-        .replace(/\s+/g, "_");
-
-    const numeric = (value) => {
-      const number = Number(value);
-      return Number.isFinite(number) ? number : null;
-    };
-
-    return features
-      .map((feature) => {
-
-        const properties =
-          feature?.properties || {};
-
-        const indicators =
-          properties.field_indicators ||
-          properties.indicators ||
-          {};
-
-        const category =
-          normalizeCategory(
-            properties.category ??
-            properties.field_category ??
-            indicators.category
-          );
-
-        const fieldId = String(
-          properties.field_id ??
-          properties.id ??
-          ""
-        );
-
-        const area = numeric(
-          indicators.area_hectares ??
-          properties.area_hectares
-        );
-
-        const decline = numeric(
-          indicators.decline ??
-          properties.decline
-        );
-
-        const candidateDate =
-          indicators.candidate_date ??
-          properties.candidate_date ??
-          null;
-
-        const status =
-          indicators.field_status ??
-          properties.field_status ??
-          "";
-
-        const ndviTrend =
-          indicators.ndvi_trend ??
-          properties.ndvi_trend ??
-          "";
-
-        const nbrTrend =
-          indicators.nbr_trend ??
-          properties.nbr_trend ??
-          "";
-
-        return {
-          fieldId,
-          category,
-          area,
-          decline,
-          candidateDate,
-          status,
-          ndviTrend,
-          nbrTrend
-        };
-
-      })
-      .filter((field) => field.fieldId)
-      .filter((field) => {
-        const normalizedSearch =
-          fieldSearch.toLowerCase().trim();
-
-        const matchesSearch =
-          !normalizedSearch ||
-          field.fieldId
-            .toLowerCase()
-            .includes(normalizedSearch);
-
-        const matchesCategory =
-          categoryFilter === "all" ||
-          field.category === categoryFilter;
-
-        return matchesSearch && matchesCategory;
-      })
-      .sort((a, b) => {
-        const declineA = a.decline ?? -Infinity;
-        const declineB = b.decline ?? -Infinity;
-
-        return declineB - declineA;
-      })
-      .slice(0, 10);
-
-  }, [
-    geojson,
-    fieldSearch,
-    categoryFilter
-  ]);
-
-
-  // =====================================================
-  // TREND OVERVIEW
-  // =====================================================
-
   const trendStats = useMemo(() => {
-
-    const features = geojson?.features || [];
-
-    const normalize = (value) =>
-      String(value || "")
-        .toLowerCase()
-        .trim();
+    const features =
+      geojson?.features || [];
 
     let ndviDecreasing = 0;
     let nbrDecreasing = 0;
@@ -922,29 +577,47 @@ function App() {
     const scatterData = [];
 
     features.forEach((feature) => {
-
-      const properties = feature?.properties || {};
+      const properties =
+        feature?.properties || {};
 
       const indicators =
         properties.field_indicators ||
         properties.indicators ||
         {};
 
-      const ndviTrend = normalize(
-        indicators.ndvi_trend ??
-        properties.ndvi_trend
+      const ndviTrend =
+        normalizeCategory(
+          indicators.ndvi_trend ??
+            properties.ndvi_trend
+        );
+
+      const nbrTrend =
+        normalizeCategory(
+          indicators.nbr_trend ??
+            properties.nbr_trend
+        );
+
+      const area = Number(
+        indicators.area_hectares ??
+          properties.area_hectares
       );
 
-      const nbrTrend = normalize(
-        indicators.nbr_trend ??
-        properties.nbr_trend
+      const decline = Number(
+        indicators.decline ??
+          properties.decline
       );
 
-      if (ndviTrend === "decreasing") {
+      if (
+        ndviTrend ===
+        "decreasing"
+      ) {
         ndviDecreasing += 1;
       }
 
-      if (nbrTrend === "decreasing") {
+      if (
+        nbrTrend ===
+        "decreasing"
+      ) {
         nbrDecreasing += 1;
       }
 
@@ -955,34 +628,19 @@ function App() {
         bothDecreasing += 1;
       }
 
-      const area = Number(
-        indicators.area_hectares ??
-        properties.area_hectares
-      );
-
-      const decline = Number(
-        indicators.decline ??
-        properties.decline
-      );
-
-      const fieldId = String(
-        properties.field_id ??
-        properties.id ??
-        ""
-      );
-
       if (
-        fieldId &&
         Number.isFinite(area) &&
         Number.isFinite(decline)
       ) {
         scatterData.push({
-          fieldId,
+          fieldId:
+            properties.field_id ||
+            properties.id ||
+            "Unknown",
           area,
           decline
         });
       }
-
     });
 
     return {
@@ -991,721 +649,920 @@ function App() {
       bothDecreasing,
       scatterData
     };
-
   }, [geojson]);
 
 
-  // =====================================================
-  // FIELD INTELLIGENCE PRIORITIZATION
-  // =====================================================
-
-  // This is a transparent dashboard heuristic, not an ML
-  // prediction or validated burn/harvest forecast.
-  const fieldIntelligence = useMemo(() => {
-
-    const features = geojson?.features || [];
-
-    const normalize = (value) =>
-      String(value || "")
-        .toLowerCase()
-        .trim()
-        .replace(/-/g, "_")
-        .replace(/\s+/g, "_");
-
-    const numeric = (value) => {
-      const number = Number(value);
-      return Number.isFinite(number) ? number : null;
-    };
-
-    const getField = (feature) => {
-
-      const properties = feature?.properties || {};
-
-      const indicators =
-        properties.field_indicators ||
-        properties.indicators ||
-        {};
-
-      const category = normalize(
-        properties.category ??
-        properties.field_category ??
-        indicators.category
-      );
-
-      const fieldId = String(
-        properties.field_id ??
-        properties.id ??
-        ""
-      );
-
-      const fieldStatus = normalize(
-        indicators.field_status ??
-        properties.field_status
-      );
-
-      const ndviTrend = normalize(
-        indicators.ndvi_trend ??
-        properties.ndvi_trend
-      );
-
-      const nbrTrend = normalize(
-        indicators.nbr_trend ??
-        properties.nbr_trend
-      );
-
-      const candidateDate =
-        indicators.candidate_date ??
-        properties.candidate_date ??
-        null;
-
-      const decline = numeric(
-        indicators.decline ??
-        properties.decline
-      );
-
-      let score = 0;
-
-      if (
-        fieldStatus ===
-        "crop_transition_candidate"
-      ) {
-        score += 2;
+  const filteredGeojson =
+    useMemo(() => {
+      if (!geojson) {
+        return null;
       }
 
-      if (ndviTrend === "decreasing") {
-        score += 1;
-      }
-
-      if (nbrTrend === "decreasing") {
-        score += 1;
-      }
-
-      if (category === "completely_burnt") {
-        score += 2;
-      } else if (category === "partially_burnt") {
-        score += 1;
-      }
-
-      let priority = "Low attention";
-
-      if (score >= 4) {
-        priority = "High attention";
-      } else if (score >= 2) {
-        priority = "Medium attention";
-      }
+      const normalizedSearch =
+        fieldSearch
+          .toLowerCase()
+          .trim();
 
       return {
-        fieldId,
-        category,
-        fieldStatus,
-        ndviTrend,
-        nbrTrend,
-        candidateDate,
-        decline,
-        score,
-        priority
+        ...geojson,
+        features: (
+          geojson.features || []
+        ).filter((feature) => {
+          const properties =
+            feature?.properties || {};
+
+          const sourceId =
+            String(
+              properties.field_id ??
+                properties.id ??
+                ""
+            ).toLowerCase();
+
+          const logicalId =
+            sourceId.match(
+              /^\d{4}_(.+)$/
+            )?.[1] || sourceId;
+
+          const category =
+            normalizeCategory(
+              properties.category ??
+                properties.field_category ??
+                properties.indicators
+                  ?.category ??
+                properties
+                  .field_indicators
+                  ?.category
+            );
+
+          const matchesSearch =
+            !normalizedSearch ||
+            sourceId.includes(
+              normalizedSearch
+            ) ||
+            logicalId.includes(
+              normalizedSearch
+            );
+
+          const matchesCategory =
+            categoryFilter === "all" ||
+            category === categoryFilter;
+
+          return (
+            matchesSearch &&
+            matchesCategory
+          );
+        })
       };
-
-    };
-
-    const fields = features
-      .map(getField)
-      .filter((field) => field.fieldId);
-
-    const high = fields.filter(
-      (field) =>
-        field.priority === "High attention"
-    ).length;
-
-    const medium = fields.filter(
-      (field) =>
-        field.priority === "Medium attention"
-    ).length;
-
-    const low = fields.filter(
-      (field) =>
-        field.priority === "Low attention"
-    ).length;
-
-    const priorityFields = [...fields]
-      .sort((a, b) => {
-
-        if (b.score !== a.score) {
-          return b.score - a.score;
-        }
-
-        return (
-          (b.decline ?? -Infinity) -
-          (a.decline ?? -Infinity)
-        );
-
-      })
-      .slice(0, 10);
-
-    return {
-      fields,
-      high,
-      medium,
-      low,
-      priorityFields
-    };
-
-  }, [geojson]);
+    }, [
+      geojson,
+      fieldSearch,
+      categoryFilter
+    ]);
 
 
-  // =====================================================
-  // RENDER
-  // =====================================================
+  const selectedCategory =
+    normalizeCategory(
+      indicators?.category ||
+        fieldData?.field_category
+    );
+
+
+  const scrollTo = (id) => {
+    document
+      .getElementById(id)
+      ?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+  };
+
+
+  const clearField = () => {
+    setFieldData(null);
+    setFieldError("");
+    setHarvestPrediction(null);
+    setHarvestError("");
+    setHarvestLoading(false);
+  };
+
 
   return (
-    <div className="app">
+    <div className="parali-app">
+      <header className="parali-header">
+        <div className="parali-brand">
+          <div className="parali-logo">
+            <Leaf size={20} strokeWidth={2.3} />
+          </div>
 
-      <header className="header">
-        <div>
-          <h1>🌾 Project Parali</h1>
-          <p>AI-powered crop residue monitoring platform</p>
+          <div>
+            <div className="parali-brand-name">
+              PROJECT <span>PARALI</span>
+            </div>
+            <div className="parali-brand-sub">
+              Satellite Intelligence for Crop Transition
+            </div>
+          </div>
         </div>
 
-        <div className="status">
-          <span></span>
-          API Connected
+        <nav className="parali-nav">
+          <button
+            type="button"
+            onClick={() =>
+              scrollTo("project-explanation")
+            }
+          >
+            Project
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              scrollTo("satellite-signals")
+            }
+          >
+            Signals
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              scrollTo("satellite-monitoring")
+            }
+          >
+            Monitoring
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              scrollTo("field-analysis")
+            }
+          >
+            Analysis
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              scrollTo("burn-detection")
+            }
+          >
+            Burn
+          </button>
+        </nav>
+
+        <div className="parali-live-status">
+          <span className="live-dot" />
+          API LINKED
         </div>
       </header>
 
-      <main className="container">
 
-        <section className="hero">
-          <span className="eyebrow">AGRI INTELLIGENCE COMMAND CENTER</span>
+      <main>
+        <section className="parali-hero">
+          <div className="hero-grid-overlay" />
 
-          <h2>AI Harvest Prediction Command Center</h2>
-
-          <p>
-            Predict near-term harvest likelihood from Sentinel-2
-            NDVI/NBR time-series signals, then use burn detection
-            and field intelligence as supporting evidence.
-          </p>
-        </section>
-
-        {/* =================================================
-            DASHBOARD OVERVIEW
-        ================================================= */}
-
-        <section className="dashboard-section">
-
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">OVERVIEW</span>
-
-              <h2>Field Intelligence Dashboard</h2>
-
-              <p>
-                Overview of the Sangrur field dataset and current
-                satellite-derived monitoring indicators.
-              </p>
+          <div className="hero-content">
+            <div className="hero-kicker">
+              <span className="kicker-line" />
+              AGRI-TECH / SANGRUR / LIVE
             </div>
 
-            <div className="map-count">
-              {filteredFieldCount} / {dashboardStats.totalFields} fields
-            </div>
-          </div>
+            <div className="hero-title-wrap">
+              <div className="hero-index">
+                01
+              </div>
 
-          <DashboardCards
-            totalFields={dashboardStats.totalFields}
-            completelyBurnt={dashboardStats.completelyBurnt}
-            partiallyBurnt={dashboardStats.partiallyBurnt}
-            transitionCandidates={
-              dashboardStats.transitionCandidates
-            }
-          />
-
-          <div className="dashboard-filters">
-
-            <div className="filter-field">
-              <label htmlFor="field-search">
-                Search field
-              </label>
-
-              <input
-                id="field-search"
-                type="text"
-                value={fieldSearch}
-                onChange={(e) =>
-                  setFieldSearch(e.target.value)
-                }
-                placeholder="Search field ID e.g. 2021_34"
-              />
+              <h1>
+                See the
+                <span> harvest </span>
+                before the smoke.
+              </h1>
             </div>
 
-            <div className="filter-field">
-              <label htmlFor="category-filter">
-                Category
-              </label>
+            <p className="hero-copy">
+              Project Parali turns Sentinel-2 observations into
+              field-level crop-transition signals and live burn
+              intelligence — giving each selected field a clear
+              satellite evidence trail.
+            </p>
 
-              <select
-                id="category-filter"
-                value={categoryFilter}
-                onChange={(e) =>
-                  setCategoryFilter(e.target.value)
+            <div className="hero-actions">
+              <button
+                type="button"
+                className="hero-primary-action"
+                onClick={() =>
+                  scrollTo(
+                    "satellite-monitoring"
+                  )
                 }
               >
-                <option value="all">
-                  All Categories
-                </option>
+                <LocateFixed size={17} />
+                Explore field map
+                <ChevronRight size={17} />
+              </button>
 
-                <option value="unburnt">
-                  Unburnt
-                </option>
-
-                <option value="partially_burnt">
-                  Partially Burnt
-                </option>
-
-                <option value="completely_burnt">
-                  Completely Burnt
-                </option>
-
-                <option value="golden_yellow_unburnt">
-                  Golden Yellow Unburnt
-                </option>
-
-                <option value="green_unburnt">
-                  Green Unburnt
-                </option>
-              </select>
+              <button
+                type="button"
+                className="hero-secondary-action"
+                onClick={() =>
+                  scrollTo(
+                    "project-explanation"
+                  )
+                }
+              >
+                How it works
+                <ArrowDownRight size={16} />
+              </button>
             </div>
 
+            <div className="hero-metrics">
+              <div>
+                <span>Fields in view</span>
+                <strong>
+                  {dashboardStats.totalFields.toLocaleString()}
+                </strong>
+              </div>
+
+              <div>
+                <span>Transition candidates</span>
+                <strong>
+                  {dashboardStats.transitionCandidates.toLocaleString()}
+                </strong>
+              </div>
+
+              <div>
+                <span>Signal engine</span>
+                <strong>
+                  NDVI / NBR
+                </strong>
+              </div>
+            </div>
           </div>
 
+          <div className="hero-art">
+            <div className="hero-orbit hero-orbit-one" />
+            <div className="hero-orbit hero-orbit-two" />
+            <div className="hero-orbit hero-orbit-three" />
+
+            <div className="hero-satellite-card">
+              <div className="satellite-card-top">
+                <span>FIELD TELEMETRY</span>
+                <Radio size={15} />
+              </div>
+
+              <div className="satellite-card-number">
+                {fieldId || "—"}
+              </div>
+
+              <div className="satellite-card-caption">
+                {fieldId
+                  ? "Logical field selected"
+                  : "Select a field to begin"}
+              </div>
+
+              <div className="satellite-card-wave">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+
+            <div className="hero-coordinate-chip">
+              <Crosshair size={13} />
+              <span>Sentinel-2 / 10m context</span>
+            </div>
+          </div>
         </section>
 
-        {/* =================================================
-            FIELD INTELLIGENCE
-        ================================================= */}
 
-        <IntelligencePanel
-          high={fieldIntelligence.high}
-          medium={fieldIntelligence.medium}
-          low={fieldIntelligence.low}
-          priorityFields={
-            fieldIntelligence.priorityFields
-          }
-          onFieldSelect={handleFieldSelect}
-        />
+        <section
+          id="project-explanation"
+          className="parali-section project-section"
+        >
+          <div className="section-rail">
+            <span>PROJECT EXPLANATION</span>
+            <span>02</span>
+          </div>
 
-        {/* =================================================
-            HARVEST SIGNAL
-        ================================================= */}
+          <div className="section-main">
+            <div className="section-heading-wide">
+              <div>
+                <div className="section-overline">
+                  THE SYSTEM IN ONE GLANCE
+                </div>
 
-        <section className="harvest-command-section">
-
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">FIELD ANALYSIS</span>
-
-              <h2>Harvest Signal Assessment</h2>
+                <h2>
+                  From satellite pixels
+                  <span> to field intelligence.</span>
+                </h2>
+              </div>
 
               <p>
-                Analyze the selected field using the latest usable Sentinel-2
-                NDVI/NBR observations. The result is a live crop-transition
-                signal assessment, not a calibrated probability or confirmed
-                harvest date.
+                The interface is built around one simple interaction:
+                pick a field, then follow the evidence. Historical
+                field context remains visible while live Sentinel-2
+                observations provide the current monitoring layer.
               </p>
             </div>
 
-            {harvestPrediction?.field_id && (
-              <div className="harvest-field-badge">
-                Field {harvestPrediction.field_id}
+            <div className="project-flow">
+              <article className="flow-card flow-card-dark">
+                <div className="flow-number">01</div>
+                <Satellite size={22} />
+                <h3>Observe</h3>
+                <p>
+                  Sentinel-2 imagery is translated into NDVI and NBR
+                  time-series signals for the selected field.
+                </p>
+              </article>
+
+              <div className="flow-arrow">
+                <ChevronRight size={19} />
               </div>
-            )}
+
+              <article className="flow-card">
+                <div className="flow-number">02</div>
+                <Activity size={22} />
+                <h3>Interpret</h3>
+                <p>
+                  Changes in vegetation and spectral response are
+                  surfaced as transparent crop-transition signals.
+                </p>
+              </article>
+
+              <div className="flow-arrow">
+                <ChevronRight size={19} />
+              </div>
+
+              <article className="flow-card">
+                <div className="flow-number">03</div>
+                <ShieldCheck size={22} />
+                <h3>Inspect</h3>
+                <p>
+                  Burn detection and field analysis give the selected
+                  location a second, independent monitoring view.
+                </p>
+              </article>
+            </div>
+
+            <div className="project-note">
+              <Sparkles size={17} />
+              <div>
+                <strong>Designed around evidence, not a single score.</strong>
+                <span>
+                  The current system presents satellite-derived
+                  indicators as monitoring evidence rather than a
+                  confirmed harvest date or calibrated probability.
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <section
+          id="satellite-signals"
+          className="parali-section signals-section"
+        >
+          <div className="section-rail">
+            <span>SATELLITE SIGNALS</span>
+            <span>03</span>
           </div>
 
-          {harvestLoading && (
-            <div className="harvest-state-card">
-              <strong>Analyzing satellite signals...</strong>
-              <span>Examining NDVI/NBR trends for the selected field.</span>
-            </div>
-          )}
-
-          {!harvestLoading && harvestError && (
-            <div className="error">
-              {harvestError}
-            </div>
-          )}
-
-          {!harvestLoading && !harvestError && harvestPrediction && (
-            <>
-              <div className="harvest-probability-grid">
-
-                <div className="harvest-main-card">
-                  <span className="harvest-card-label">
-                    Current satellite assessment
-                  </span>
-
-                  <strong>
-                    {harvestPrediction.status_label || "Assessment available"}
-                  </strong>
-
-                  <div className={`harvest-level harvest-level-${String(
-                    harvestPrediction.signal_level || "unknown"
-                  ).toLowerCase()}`}>
-                    {harvestPrediction.signal_level || "Unknown"} signal
-                  </div>
-
-                  <span className="harvest-asof">
-                    Based on observations through {harvestPrediction.as_of_date || "N/A"}
-                  </span>
-
-                  {harvestPrediction.latest_observation?.cloud_pct != null && (
-                    <span className="harvest-asof">
-                      Latest usable scene cloud cover: {harvestPrediction.latest_observation.cloud_pct}%
-                    </span>
-                  )}
+          <div className="section-main">
+            <div className="section-heading-wide">
+              <div>
+                <div className="section-overline">
+                  FIELD SIGNAL LANDSCAPE
                 </div>
-
-                <div className="harvest-horizon-card">
-                  <span>NDVI observations</span>
-                  <strong>
-                    {harvestPrediction.signals?.observations ?? "N/A"}
-                  </strong>
-                </div>
-
-                <div className="harvest-horizon-card">
-                  <span>Candidate transition</span>
-                  <strong>
-                    {harvestPrediction.signals?.candidate_date || "None"}
-                  </strong>
-                </div>
-
+                <h2>
+                  What the
+                  <span> satellites are seeing.</span>
+                </h2>
               </div>
 
-              {harvestPrediction.estimated_transition_window?.start && (
-                <div className="harvest-window-card" style={{ marginTop: "16px" }}>
-                  <span>Estimated transition window</span>
+              <p>
+                These counts summarize the loaded field indicators.
+                They describe observed trends and candidate
+                transitions, not validated outcomes.
+              </p>
+            </div>
+
+            <div className="signal-stat-grid">
+              <article className="signal-stat-card">
+                <div className="signal-stat-icon">
+                  <TrendingDown size={19} />
+                </div>
+                <span>NDVI decreasing</span>
+                <strong>
+                  {trendStats.ndviDecreasing}
+                </strong>
+                <small>
+                  Fields with a decreasing vegetation trend
+                </small>
+              </article>
+
+              <article className="signal-stat-card signal-stat-card-accent">
+                <div className="signal-stat-icon">
+                  <Waves size={19} />
+                </div>
+                <span>NBR decreasing</span>
+                <strong>
+                  {trendStats.nbrDecreasing}
+                </strong>
+                <small>
+                  Fields with a decreasing NBR trend
+                </small>
+              </article>
+
+              <article className="signal-stat-card">
+                <div className="signal-stat-icon">
+                  <Target size={19} />
+                </div>
+                <span>Both decreasing</span>
+                <strong>
+                  {trendStats.bothDecreasing}
+                </strong>
+                <small>
+                  Fields where both indicators are decreasing
+                </small>
+              </article>
+
+              <article className="signal-stat-card">
+                <div className="signal-stat-icon">
+                  <Sparkles size={19} />
+                </div>
+                <span>Transition candidates</span>
+                <strong>
+                  {dashboardStats.transitionCandidates}
+                </strong>
+                <small>
+                  Existing candidate-transition indicator
+                </small>
+              </article>
+            </div>
+
+            <div className="signal-chart-card">
+              <div className="signal-chart-header">
+                <div>
+                  <span>FIELD RELATIONSHIP</span>
+                  <h3>Area vs NDVI decline</h3>
+                </div>
+
+                <div className="signal-chart-legend">
+                  <span className="signal-legend-dot" />
+                  Field observations
+                </div>
+              </div>
+
+              <FieldAreaDeclineChart
+                data={trendStats.scatterData}
+              />
+            </div>
+          </div>
+        </section>
+
+
+        <section
+          id="satellite-monitoring"
+          className="parali-section monitoring-section"
+        >
+          <div className="section-rail">
+            <span>SATELLITE MONITORING</span>
+            <span>04</span>
+          </div>
+
+          <div className="section-main">
+            <div className="section-heading-wide monitoring-heading">
+              <div>
+                <div className="section-overline">
+                  LIVE FIELD ATLAS
+                </div>
+                <h2>
+                  Explore every
+                  <span> monitored polygon.</span>
+                </h2>
+              </div>
+
+              <div className="monitoring-counter">
+                <span>Visible</span>
+                <strong>
+                  {filteredGeojson?.features?.length || 0}
+                </strong>
+                <small>
+                  / {dashboardStats.totalFields}
+                </small>
+              </div>
+            </div>
+
+            <div className="monitoring-toolbar">
+              <label className="monitoring-search">
+                <ScanSearch size={17} />
+                <input
+                  type="text"
+                  value={fieldSearch}
+                  onChange={(event) =>
+                    setFieldSearch(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Search field 34, 343, 2021_343..."
+                />
+                {fieldSearch && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFieldSearch("")
+                    }
+                    aria-label="Clear field search"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </label>
+
+              <div className="monitoring-filters">
+                {[
+                  ["all", "All"],
+                  ["unburnt", "Unburnt"],
+                  ["partially_burnt", "Partial"],
+                  ["completely_burnt", "Burnt"],
+                  [
+                    "golden_yellow_unburnt",
+                    "Golden"
+                  ],
+                  ["green_unburnt", "Green"]
+                ].map(
+                  ([value, label]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      className={
+                        categoryFilter ===
+                        value
+                          ? "filter-chip active"
+                          : "filter-chip"
+                      }
+                      onClick={() =>
+                        setCategoryFilter(
+                          value
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {mapError && (
+              <div className="parali-inline-error">
+                {mapError}
+              </div>
+            )}
+
+            <div className="map-frame">
+              <div className="map-frame-topline">
+                <div className="map-frame-label">
+                  <span className="map-live-dot" />
+                  SATELLITE LAYER
+                </div>
+
+                <span>
+                  Click a polygon or field number
+                </span>
+              </div>
+
+              <div className="map-frame-body">
+                {mapLoading ? (
+                  <div className="map-loading">
+                    <div className="map-loader-ring" />
+                    <strong>
+                      Loading field atlas...
+                    </strong>
+                    <span>
+                      Connecting to Project Parali field geometry.
+                    </span>
+                  </div>
+                ) : filteredGeojson?.features?.length ? (
+                  <FieldMap
+                    geojson={filteredGeojson}
+                    onFieldSelect={
+                      handleFieldSelect
+                    }
+                  />
+                ) : (
+                  <div className="map-loading">
+                    <MapPinned size={25} />
+                    <strong>
+                      No fields match the current filter.
+                    </strong>
+                    <span>
+                      Reset the search or category filter to continue.
+                    </span>
+                  </div>
+                )}
+
+                <MapLegend />
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <section
+          id="field-analysis"
+          className="parali-section field-analysis-section"
+        >
+          <div className="section-rail">
+            <span>FIELD ANALYSIS</span>
+            <span>05</span>
+          </div>
+
+          <div className="section-main">
+            <div className="section-heading-wide">
+              <div>
+                <div className="section-overline">
+                  SELECTED FIELD
+                </div>
+                <h2>
+                  Turn one polygon into a
+                  <span> complete evidence trail.</span>
+                </h2>
+              </div>
+
+              <p>
+                Select a logical field number to pull the current
+                satellite analysis. Source-year records remain
+                resolved by the backend while the interface keeps
+                the field view simple.
+              </p>
+            </div>
+
+            <div className="field-command-card">
+              <div className="field-command-top">
+                <div className="field-command-badge">
+                  <Crosshair size={17} />
+                </div>
+
+                <div>
+                  <span>FIELD ID</span>
                   <strong>
-                    {harvestPrediction.estimated_transition_window.start}
-                    {" → "}
-                    {harvestPrediction.estimated_transition_window.end}
+                    {fieldId || "Awaiting selection"}
                   </strong>
-                  <small>
-                    Based on current satellite signals and historical candidate-transition timing.
-                  </small>
+                </div>
+
+                {fieldId && (
+                  <button
+                    type="button"
+                    className="field-clear-button"
+                    onClick={clearField}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              <div className="field-command-form">
+                <label>
+                  <span>
+                    Analyze a logical field directly
+                  </span>
+                  <input
+                    type="text"
+                    value={fieldId}
+                    onChange={(event) =>
+                      setFieldId(
+                        event.target.value
+                          .trim()
+                      )
+                    }
+                    placeholder="e.g. 34 or 343"
+                    onKeyDown={(event) => {
+                      if (
+                        event.key ===
+                        "Enter"
+                      ) {
+                        analyzeField();
+                      }
+                    }}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    analyzeField()
+                  }
+                  disabled={fieldLoading}
+                >
+                  {fieldLoading ? (
+                    <>
+                      <span className="button-spinner" />
+                      Reading field...
+                    </>
+                  ) : (
+                    <>
+                      <Satellite size={17} />
+                      Open analysis
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {fieldError && (
+                <div className="parali-inline-error">
+                  {fieldError}
                 </div>
               )}
 
-              <div className="harvest-detail-grid">
-
-                <div className="harvest-window-card">
-                  <span>What the satellite evidence says</span>
-
-                  <strong>
-                    {harvestPrediction.status === "harvest_transition_signal"
-                      ? "Harvest/crop-transition signal detected"
-                      : harvestPrediction.status === "possible_transition"
-                        ? "Possible crop-transition signal"
-                        : harvestPrediction.status === "insufficient_data"
-                          ? "More observations required"
-                          : "No strong harvest signal"}
-                  </strong>
-
-                  <small>
-                    This describes observed vegetation change. It is not a
-                    confirmed harvest date.
-                  </small>
+              {!fieldData && !fieldLoading && !fieldError && (
+                <div className="analysis-waiting">
+                  <Radio size={18} />
+                  <span>
+                    Choose a field on the map or enter a field number
+                    to begin.
+                  </span>
                 </div>
+              )}
 
-                <div className="harvest-signals-card">
-                  <span>Evidence</span>
+              {fieldData && !fieldLoading && (
+                <div className="analysis-snapshot">
+                  <div className="analysis-snapshot-main">
+                    <div className="analysis-status-line">
+                      <span className="status-pulse" />
+                      SATELLITE ANALYSIS READY
+                    </div>
 
-                  <ul>
-                    {(harvestPrediction.reasons || []).map((reason) => (
-                      <li key={reason}>{reason}</li>
-                    ))}
-                  </ul>
+                    <h3>
+                      Field {fieldData.field_id}
+                    </h3>
+
+                    <p>
+                      {formatLabel(
+                        selectedCategory ||
+                          "field analysis"
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="analysis-snapshot-grid">
+                    <div>
+                      <span>Area</span>
+                      <strong>
+                        {indicators?.area_hectares != null
+                          ? `${indicators.area_hectares} ha`
+                          : "N/A"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>NDVI trend</span>
+                      <strong>
+                        {formatLabel(
+                          indicators?.ndvi_trend
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>NBR trend</span>
+                      <strong>
+                        {formatLabel(
+                          indicators?.nbr_trend
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Latest scene</span>
+                      <strong>
+                        {latestObservation?.date ||
+                          "N/A"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="analysis-signal-banner">
+                    <div>
+                      <span>Current signal</span>
+                      <strong>
+                        {harvestPrediction?.status_label ||
+                          "Satellite assessment available"}
+                      </strong>
+                    </div>
+
+                    <div className="analysis-signal-level">
+                      {harvestPrediction?.signal_level ||
+                        "Unknown"}
+                    </div>
+                  </div>
                 </div>
+              )}
+            </div>
 
+            <div className="analysis-guidance">
+              <div className="guidance-icon">
+                <TrendingUp size={19} />
               </div>
 
-              <div className="harvest-signal-strip">
-                <div>
-                  <span>NDVI decline</span>
-                  <strong>
-                    {harvestPrediction.signals?.ndvi_decline_from_peak ?? "N/A"}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Recent NDVI slope</span>
-                  <strong>
-                    {harvestPrediction.signals?.recent_ndvi_slope_per_day ?? "N/A"}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>NBR decline</span>
-                  <strong>
-                    {harvestPrediction.signals?.nbr_decline_from_peak ?? "N/A"}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Latest NDVI</span>
-                  <strong>
-                    {harvestPrediction.signals?.latest_ndvi ?? "N/A"}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Negative NDVI steps</span>
-                  <strong>
-                    {harvestPrediction.signals?.negative_steps ?? "N/A"}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="harvest-validation-note">
-                <strong>Important:</strong>{" "}
-                {harvestPrediction.validation_note}
-              </div>
-            </>
-          )}
-
-          {!harvestLoading && !harvestError && !harvestPrediction && (
-            <div className="harvest-state-card">
-              <strong>Click a field on the map to analyze it.</strong>
-              <span>The selected field's satellite time series will appear here.</span>
-            </div>
-          )}
-
-        </section>
-
-        {/* =================================================
-            TREND OVERVIEW
-        ================================================= */}
-
-        <section className="analytics-section">
-
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">SATELLITE SIGNALS</span>
-
-              <h2>Transition Signal Overview</h2>
-
-              <p>
-                Observed NDVI and NBR trends across the loaded
-                field dataset. These are monitoring indicators,
-                not confirmed burn or harvest predictions.
-              </p>
-            </div>
-          </div>
-
-          <div className="signal-summary">
-
-            <div className="signal-card">
-              <span>NDVI Decreasing</span>
-              <strong>{trendStats.ndviDecreasing}</strong>
-            </div>
-
-            <div className="signal-card">
-              <span>NBR Decreasing</span>
-              <strong>{trendStats.nbrDecreasing}</strong>
-            </div>
-
-            <div className="signal-card">
-              <span>Both Decreasing</span>
-              <strong>{trendStats.bothDecreasing}</strong>
-            </div>
-
-          </div>
-
-          <div className="chart-card">
-
-            <div className="chart-header">
               <div>
-                <h3>Field Area vs NDVI Decline</h3>
-
-                <p>
-                  Each point represents a field with available
-                  area and NDVI-decline indicators.
-                </p>
+                <strong>
+                  One field. Multiple signals. One view.
+                </strong>
+                <span>
+                  The analysis drawer combines the selected field's
+                  historical context, current NDVI/NBR evidence and
+                  Sentinel-2 timeline without mixing the evidence
+                  layers together.
+                </span>
               </div>
             </div>
-
-            <div className="chart-container">
-
-              <FieldAreaDeclineChart data={trendStats.scatterData} />
-
-            </div>
           </div>
-
         </section>
 
-        {/* =================================================
-            FIELD MAP
-        ================================================= */}
 
-        <section className="map-section">
+        <section
+          id="burn-detection"
+          className="parali-section burn-section"
+        >
+          <div className="section-rail">
+            <span>BURN DETECTION</span>
+            <span>06</span>
+          </div>
 
-          <div className="section-heading">
-
-            <div>
-              <span className="eyebrow">
-                SATELLITE MONITORING
-              </span>
-
-              <h2>Sangrur Field Intelligence Map</h2>
+          <div className="section-main">
+            <div className="section-heading-wide">
+              <div>
+                <div className="section-overline">
+                  LIVE SATELLITE MONITORING
+                </div>
+                <h2>
+                  Detect spectral
+                  <span> burn-related signals.</span>
+                </h2>
+              </div>
 
               <p>
-                Click a field to inspect its satellite
-                indicators and crop-transition signals.
+                Run a live Sentinel-2 burn assessment against the
+                selected field. The result remains an evidence signal,
+                not a confirmed fire event.
               </p>
             </div>
 
-            <div className="map-count">
-              {filteredFieldCount} fields
-            </div>
-
+            <BurnDetector
+              fieldId={fieldId}
+              fieldData={fieldData}
+            />
           </div>
-
-          {mapError && (
-            <div className="error">
-              {mapError}
-            </div>
-          )}
-
-          <div className="map-shell">
-
-            {mapLoading ? (
-              <div className="map-loading">
-                Loading satellite field map...
-              </div>
-            ) : filteredFieldCount > 0 ? (
-              <FieldMap
-                geojson={filteredGeojson}
-                onFieldSelect={handleFieldSelect}
-              />
-            ) : (
-              <div className="map-loading">
-                {geojson
-                  ? "No fields match the current filters."
-                  : "Field map unavailable."}
-              </div>
-            )}
-
-            <MapLegend />
-
-          </div>
-
         </section>
-
-        {/* =================================================
-            FIELD DRAWER
-        ================================================= */}
-
-        <FieldDrawer
-          fieldData={fieldData}
-          harvestPrediction={harvestPrediction}
-          harvestLoading={harvestLoading}
-          harvestError={harvestError}
-          residueEstimate={residueEstimate}
-          residueLoading={residueLoading}
-          residueError={residueError}
-          biomassOpportunity={biomassOpportunity}
-          biomassOpportunityLoading={biomassOpportunityLoading}
-          biomassOpportunityError={biomassOpportunityError}
-          clusterEstimate={clusterEstimate}
-          clusterLoading={clusterLoading}
-          clusterError={clusterError}
-          logisticsEstimate={logisticsEstimate}
-          logisticsLoading={logisticsLoading}
-          logisticsError={logisticsError}
-          open={Boolean(fieldData)}
-          loading={fieldLoading}
-          error={fieldError}
-          onClose={() => {
-            setFieldData(null);
-            setFieldError("");
-            setHarvestPrediction(null);
-            setHarvestError("");
-            setResidueEstimate(null);
-            setResidueError("");
-            setBiomassOpportunity(null);
-            setBiomassOpportunityError("");
-            setClusterEstimate(null);
-            setClusterError("");
-            setLogisticsEstimate(null);
-            setLogisticsError("");
-          }}
-          onAnalyze={() => analyzeField(fieldId)}
-        />
-
-        {/* =================================================
-            LIVE BURN ANALYSIS
-        ================================================= */}
-
-        <BurnDetector
-          fieldId={fieldId}
-          fieldData={fieldData}
-        />
-
-        {/* =================================================
-            FALLBACK FIELD ANALYSIS
-        ================================================= */}
-
-        {!fieldData && (
-          <section
-            id="field-analysis"
-            className="analysis-placeholder"
-          >
-            <div>
-              <span className="eyebrow">
-                FIELD ANALYSIS
-              </span>
-
-              <h2>Select a field to inspect</h2>
-
-              <p>
-                Click any field on the map or select a field
-                from the intelligence panel to open its
-                Sentinel-2 analysis drawer.
-              </p>
-            </div>
-
-            <div className="field-analysis-input">
-
-              <input
-                type="text"
-                value={fieldId}
-                onChange={(e) =>
-                  setFieldId(e.target.value.trim())
-                }
-                placeholder="Field ID e.g. 2020_34"
-              />
-
-              <button
-                onClick={() => analyzeField()}
-                disabled={fieldLoading}
-              >
-                {fieldLoading
-                  ? "Analyzing..."
-                  : "Analyze Field"}
-              </button>
-
-            </div>
-
-            {fieldError && (
-              <div className="error">
-                {fieldError}
-              </div>
-            )}
-          </section>
-        )}
-
       </main>
 
-      <footer>
-        Project Parali • Sentinel-2 Harvest Prediction + Dual RGB/SWIR Burn Detection
-      </footer>
 
+      <FieldDrawer
+        fieldData={fieldData}
+        harvestPrediction={
+          harvestPrediction
+        }
+        harvestLoading={
+          harvestLoading
+        }
+        harvestError={
+          harvestError
+        }
+        open={Boolean(fieldData)}
+        loading={fieldLoading}
+        error={fieldError}
+        onClose={clearField}
+        onAnalyze={() =>
+          analyzeField(fieldId)
+        }
+      />
+
+
+      <footer className="parali-footer">
+        <div className="footer-brand">
+          <div className="parali-logo small">
+            <Leaf size={16} />
+          </div>
+          <span>
+            PROJECT PARALI
+          </span>
+        </div>
+
+        <div className="footer-copy">
+          Satellite evidence layer · Sangrur
+        </div>
+
+        <div className="footer-right">
+          <span>NDVI</span>
+          <span>NBR</span>
+          <span>LIVE MONITORING</span>
+        </div>
+      </footer>
     </div>
   );
 }

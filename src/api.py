@@ -17,6 +17,11 @@ except ImportError:
 from .residue_estimation import estimate_residue
 
 try:
+    from .field_grouping import group_summary, resolve_field_ids
+except ImportError:
+    from field_grouping import group_summary, resolve_field_ids
+
+try:
     from .logistics_estimation import estimate_logistics
 except ImportError:
     from logistics_estimation import estimate_logistics
@@ -259,36 +264,33 @@ def row_to_indicator_dict(row):
 
 def calculate_harvest_prediction(field_id):
     """
-    Analyze a selected field's Sentinel-2 NDVI/NBR time series.
+    Analyze the selected field's Sentinel-2 NDVI/NBR time series.
 
-    This version deliberately does NOT manufacture a percentage or a
-    7/14/21-day probability. The available Sangrur data has historical
-    crop-transition observations but no independently validated future
-    harvest-date labels.
+    A logical field number such as ``34`` combines the matching source-year
+    records (for example, ``2020_34`` and ``2021_34``). Full source IDs keep
+    their original single-field behavior.
 
-    The result is therefore a transparent satellite signal assessment:
-    - harvest_transition_signal
-    - possible_transition
-    - no_strong_signal
-    - insufficient_data
-
-    It is evidence for a harvest/crop-transition signal, not a calibrated
-    prediction of an exact harvest date.
+    The result is a transparent satellite signal assessment, not a
+    calibrated probability or an exact future harvest-date forecast.
     """
 
-    field_id = clean_field_id(field_id)
-    df = load_timeseries()
+    requested_field_id = clean_field_id(field_id)
+    summary = group_summary(requested_field_id, GEOJSON_PATH)
+    source_field_ids = summary["source_field_ids"]
 
-    field_df = df[df["field_id"] == field_id].copy()
+    df = load_timeseries()
+    field_df = df[df["field_id"].isin(source_field_ids)].copy()
 
     if field_df.empty:
         raise HTTPException(
             status_code=404,
-            detail=f"Field {field_id} not found",
+            detail=f"Field {requested_field_id} not found",
         )
 
-    # Multiple Sentinel-2 tiles can create duplicate field/date rows.
-    # Aggregate them before calculating trends.
+    field_df = field_df.sort_values("date")
+
+    # Multiple Sentinel-2 tiles and multiple source-year members can create
+    # duplicate dates. Aggregate them into one logical Field-N time point.
     series = (
         field_df.groupby("date", as_index=False)[["ndvi", "nbr"]]
         .mean()
@@ -297,9 +299,17 @@ def calculate_harvest_prediction(field_id):
 
     valid = series[series["ndvi"].notna()].copy()
 
+    group_payload = {
+        "source_field_ids": source_field_ids,
+        "source_field_count": len(source_field_ids),
+        "geometry_mode": summary["geometry_mode"],
+        "aggregation": "mean Sentinel-2 values across source-year members by date",
+    }
+
     if len(valid) < 3:
         return {
-            "field_id": field_id,
+            "field_id": requested_field_id,
+            **group_payload,
             "as_of_date": (
                 valid.iloc[-1]["date"].strftime("%Y-%m-%d")
                 if not valid.empty
@@ -316,7 +326,7 @@ def calculate_harvest_prediction(field_id):
             "model_status": "satellite-signal assessment",
             "validation_note": (
                 "This is a satellite crop-transition signal assessment. "
-                "The available Sangrur dataset does not contain independently "
+                "The available Sangrur data does not contain independently "
                 "validated future harvest-date labels."
             ),
         }
@@ -344,9 +354,7 @@ def calculate_harvest_prediction(field_id):
     recent_slope = 0.0
 
     if len(recent) >= 2:
-        x = (
-            recent["date"] - recent["date"].min()
-        ).dt.total_seconds() / 86400.0
+        x = (recent["date"] - recent["date"].min()).dt.total_seconds() / 86400.0
         y = recent["ndvi"]
 
         try:
@@ -360,47 +368,71 @@ def calculate_harvest_prediction(field_id):
             recent_slope = 0.0
 
     nbr_decline = 0.0
-
     if not nbr_valid.empty:
         peak_nbr = float(nbr_valid["nbr"].max())
         if latest_nbr is not None:
             nbr_decline = max(0.0, peak_nbr - latest_nbr)
 
     windows = load_harvest_windows()
-    candidate_date = None
-    candidate_ndvi = None
-    candidate_decline = None
-    transition_status = None
+    candidate_rows = pd.DataFrame()
 
     if not windows.empty:
-        field_window = windows[
-            windows["field_id"] == field_id
-        ]
+        candidate_rows = windows[
+            windows["field_id"].isin(source_field_ids)
+        ].copy()
 
-        if not field_window.empty:
-            row = field_window.iloc[0]
+    candidate_dates = []
+    candidate_ndvis = []
+    candidate_declines = []
+    transition_statuses = []
+
+    if not candidate_rows.empty:
+        for _, row in candidate_rows.iterrows():
             candidate_date = row.get("candidate_date")
             candidate_ndvi = row.get("candidate_ndvi")
             candidate_decline = row.get("decline")
-            transition_status = row.get("status")
+            status = row.get("status")
 
-    if pd.isna(candidate_date):
-        candidate_date = None
-    if pd.isna(candidate_ndvi):
-        candidate_ndvi = None
-    if pd.isna(candidate_decline):
-        candidate_decline = None
-    if pd.isna(transition_status):
-        transition_status = None
+            if pd.notna(candidate_date):
+                candidate_dates.append(candidate_date)
+            if pd.notna(candidate_ndvi):
+                candidate_ndvis.append(float(candidate_ndvi))
+            if pd.notna(candidate_decline):
+                candidate_declines.append(float(candidate_decline))
+            if pd.notna(status):
+                transition_statuses.append(str(status))
+
+    representative_candidate_date = None
+    if candidate_dates:
+        representative_candidate_date = sorted(candidate_dates)[len(candidate_dates) // 2]
+
+    representative_candidate_ndvi = (
+        sum(candidate_ndvis) / len(candidate_ndvis)
+        if candidate_ndvis
+        else None
+    )
+    representative_candidate_decline = (
+        sum(candidate_declines) / len(candidate_declines)
+        if candidate_declines
+        else None
+    )
+    transition_status = (
+        transition_statuses[0]
+        if len(set(transition_statuses)) == 1 and transition_statuses
+        else (
+            "multiple source-year transition observations"
+            if transition_statuses
+            else None
+        )
+    )
 
     # ---------------------------------------------------------
     # TRANSPARENT SIGNAL RULES
     # ---------------------------------------------------------
-    # These are monitoring rules, not a trained/calibrated model.
     ndvi_declining = recent_slope < -0.005
     strong_ndvi_decline = relative_decline >= 0.25
     nbr_declining = nbr_decline >= 0.15
-    candidate_available = candidate_date is not None
+    candidate_available = bool(candidate_dates)
 
     evidence_count = sum([
         ndvi_declining,
@@ -434,13 +466,14 @@ def calculate_harvest_prediction(field_id):
         reasons.append("NBR has declined from its observed peak")
 
     if candidate_available:
-        reasons.append("An NDVI-based crop-transition candidate is available")
+        reasons.append("Historical candidate-transition observations are available for the source-year group")
 
     if not reasons:
         reasons.append("Current satellite signals do not show a strong crop-transition approach")
 
     return {
-        "field_id": field_id,
+        "field_id": requested_field_id,
+        **group_payload,
         "as_of_date": latest_date.strftime("%Y-%m-%d"),
         "status": status,
         "status_label": status_label,
@@ -456,12 +489,15 @@ def calculate_harvest_prediction(field_id):
             "peak_ndvi": json_number(peak_ndvi),
             "peak_date": peak_date.strftime("%Y-%m-%d"),
             "candidate_date": (
-                candidate_date.strftime("%Y-%m-%d")
-                if candidate_date is not None
+                representative_candidate_date.strftime("%Y-%m-%d")
+                if representative_candidate_date is not None
                 else None
             ),
-            "candidate_ndvi": json_number(candidate_ndvi),
-            "candidate_decline": json_number(candidate_decline),
+            "candidate_ndvi": json_number(representative_candidate_ndvi),
+            "candidate_decline": json_number(representative_candidate_decline),
+            "candidate_source_dates": [
+                value.strftime("%Y-%m-%d") for value in sorted(candidate_dates)
+            ],
             "observations": int(len(valid)),
         },
         "reasons": reasons,
@@ -469,7 +505,7 @@ def calculate_harvest_prediction(field_id):
         "model_status": "transparent satellite-signal assessment",
         "validation_note": (
             "This assessment uses Sentinel-2 NDVI/NBR time-series evidence. "
-            "The available Sangrur dataset does not contain independently "
+            "The available Sangrur data does not contain independently "
             "validated future harvest-date labels, so it does not provide "
             "a calibrated probability or a confirmed harvest date."
         ),
@@ -836,7 +872,9 @@ def harvest_prediction(field_id: str):
 @app.get("/live-harvest-prediction/{field_id}")
 def live_harvest_prediction(field_id: str):
     """
-    Return the current Sentinel-2 monitoring assessment for a field.
+    Return the current Sentinel-2 monitoring assessment for a field or
+    logical field number. For a logical number such as 34, the live engine
+    combines the matching source-year geometries and source IDs.
 
     This is deliberately separate from /harvest-prediction/{field_id}.
     The latter uses the historical 2020 field time series, while this route
@@ -862,46 +900,170 @@ def live_harvest_prediction(field_id: str):
 
 @app.get("/field-analysis/{field_id}")
 def field_analysis(field_id: str):
-    field_id = clean_field_id(field_id)
+    requested_field_id = clean_field_id(field_id)
+
+    try:
+        summary = group_summary(requested_field_id, GEOJSON_PATH)
+        source_field_ids = summary["source_field_ids"]
+    except (ValueError, KeyError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
     df = load_timeseries()
-
-    field_df = df[df["field_id"] == field_id].copy()
+    field_df = df[df["field_id"].isin(source_field_ids)].copy()
 
     if field_df.empty:
         raise HTTPException(
             status_code=404,
-            detail=f"Field {field_id} not found",
+            detail=f"Field {requested_field_id} not found",
         )
 
     field_df = field_df.sort_values("date")
 
-    field_category = None
+    # ---------------------------------------------------------
+    # Source-year field information
+    # ---------------------------------------------------------
+    source_features = []
+    geojson = load_geojson()
 
-    if "field_category" in field_df.columns:
-        categories = (
-            field_df["field_category"]
-            .dropna()
-            .astype(str)
+    for feature in geojson.get("features", []):
+        properties = feature.get("properties") or {}
+        source_id = clean_field_id(
+            properties.get("field_id")
+            or properties.get("id")
+            or properties.get("ID")
+            or properties.get("Id")
         )
-        if not categories.empty:
-            field_category = categories.iloc[0]
+        if source_id in source_field_ids:
+            source_features.append(feature)
 
+    categories = []
+    source_fields = []
+
+    for feature in source_features:
+        properties = feature.get("properties") or {}
+        category = (
+            properties.get("field_category")
+            or properties.get("category")
+        )
+        if category is not None:
+            categories.append(str(category))
+
+        source_fields.append({
+            "field_id": clean_field_id(properties.get("field_id")),
+            "source_year": properties.get("source_year"),
+            "field_name": properties.get("field_name"),
+            "category": category,
+            "original_field_id": properties.get("original_field_id"),
+        })
+
+    if len(source_field_ids) == 1:
+        field_category = categories[0] if categories else None
+    else:
+        field_category = "combined_source_year_group"
+
+    # ---------------------------------------------------------
+    # Aggregate field indicators from both source-year members.
+    # ---------------------------------------------------------
     indicators_df = load_field_indicators()
     field_indicators = None
 
     if not indicators_df.empty:
         indicator_rows = indicators_df[
-            indicators_df["field_id"] == field_id
-        ]
+            indicators_df["field_id"].isin(source_field_ids)
+        ].copy()
 
         if not indicator_rows.empty:
-            field_indicators = row_to_indicator_dict(
-                indicator_rows.iloc[0]
-            )
+            if len(source_field_ids) == 1:
+                field_indicators = row_to_indicator_dict(
+                    indicator_rows.iloc[0]
+                )
+            else:
+                indicator_records = [
+                    row_to_indicator_dict(row)
+                    for _, row in indicator_rows.iterrows()
+                ]
 
-            if field_category is None:
-                field_category = field_indicators.get("category")
+                def numeric_mean(column):
+                    values = []
+                    for row in indicator_records:
+                        value = row.get(column)
+                        if value is not None:
+                            try:
+                                number = float(value)
+                                if math.isfinite(number):
+                                    values.append(number)
+                            except (TypeError, ValueError):
+                                pass
+                    return round(sum(values) / len(values), 4) if values else None
+
+                def numeric_sum(column):
+                    values = []
+                    for row in indicator_records:
+                        value = row.get(column)
+                        if value is not None:
+                            try:
+                                number = float(value)
+                                if math.isfinite(number):
+                                    values.append(number)
+                            except (TypeError, ValueError):
+                                pass
+                    return round(sum(values), 4) if values else None
+
+                candidate_dates = [
+                    str(row["candidate_date"])
+                    for row in indicator_records
+                    if row.get("candidate_date")
+                ]
+
+                categories_from_indicators = [
+                    str(row["category"])
+                    for row in indicator_records
+                    if row.get("category")
+                ]
+
+                ndvi_trends = [
+                    str(row["ndvi_trend"])
+                    for row in indicator_records
+                    if row.get("ndvi_trend")
+                ]
+                nbr_trends = [
+                    str(row["nbr_trend"])
+                    for row in indicator_records
+                    if row.get("nbr_trend")
+                ]
+
+                field_indicators = {
+                    "field_id": requested_field_id,
+                    "category": "combined_source_year_group",
+                    "source_field_ids": source_field_ids,
+                    "source_field_count": len(source_field_ids),
+                    "area_hectares": numeric_sum("area_hectares"),
+                    "area_acres": numeric_sum("area_acres"),
+                    "latest_ndvi": numeric_mean("latest_ndvi"),
+                    "latest_nbr": numeric_mean("latest_nbr"),
+                    "ndvi_trend": (
+                        ndvi_trends[0]
+                        if len(set(ndvi_trends)) == 1 and ndvi_trends
+                        else "mixed" if ndvi_trends else None
+                    ),
+                    "nbr_trend": (
+                        nbr_trends[0]
+                        if len(set(nbr_trends)) == 1 and nbr_trends
+                        else "mixed" if nbr_trends else None
+                    ),
+                    "candidate_date": candidate_dates,
+                    "field_status": "combined historical source-year context",
+                    "source_fields": indicator_records,
+                }
+
+    if field_indicators is None:
+        field_indicators = {
+            "field_id": requested_field_id,
+            "category": field_category,
+            "source_field_ids": source_field_ids,
+            "source_field_count": len(source_field_ids),
+            "source_fields": source_fields,
+        }
 
     valid_latest = field_df[
         field_df["ndvi"].notna()
@@ -948,57 +1110,59 @@ def field_analysis(field_id: str):
         for _, row in chart_df.iterrows()
     ]
 
+    # Historical transition information is combined by source field.
     windows = load_harvest_windows()
-    transition = None
+    transition_rows = []
 
     if not windows.empty:
-        field_window = windows[
-            windows["field_id"] == field_id
-        ]
-
-        if not field_window.empty:
-            row = field_window.iloc[0]
-
-            transition = {
+        transition_rows_df = windows[
+            windows["field_id"].isin(source_field_ids)
+        ].copy()
+        for _, row in transition_rows_df.iterrows():
+            transition_rows.append({
+                "field_id": clean_field_id(row.get("field_id")),
                 "peak_date": (
                     row["peak_date"].strftime("%Y-%m-%d")
-                    if "peak_date" in row.index
-                    and pd.notna(row["peak_date"])
+                    if "peak_date" in row.index and pd.notna(row["peak_date"])
                     else None
                 ),
-                "peak_ndvi": json_number(
-                    row.get("peak_ndvi")
-                ),
+                "peak_ndvi": json_number(row.get("peak_ndvi")),
                 "candidate_date": (
                     row["candidate_date"].strftime("%Y-%m-%d")
-                    if "candidate_date" in row.index
-                    and pd.notna(row["candidate_date"])
+                    if "candidate_date" in row.index and pd.notna(row["candidate_date"])
                     else None
                 ),
-                "candidate_ndvi": json_number(
-                    row.get("candidate_ndvi")
-                ),
-                "decline": json_number(
-                    row.get("decline")
-                ),
+                "candidate_ndvi": json_number(row.get("candidate_ndvi")),
+                "decline": json_number(row.get("decline")),
                 "status": (
-                    None
-                    if pd.isna(row.get("status"))
-                    else row.get("status")
+                    None if pd.isna(row.get("status")) else row.get("status")
                 ),
-            }
+            })
 
-    harvest = calculate_harvest_prediction(field_id)
+    if len(source_field_ids) == 1:
+        transition = transition_rows[0] if transition_rows else None
+    else:
+        transition = {
+            "mode": "combined_source_year_context",
+            "source_field_ids": source_field_ids,
+            "source_fields": transition_rows,
+        }
+
+    harvest = calculate_harvest_prediction(requested_field_id)
 
     return {
         "success": True,
-        "field_id": field_id,
+        "field_id": requested_field_id,
+        "source_field_ids": source_field_ids,
+        "source_field_count": len(source_field_ids),
+        "geometry_mode": summary["geometry_mode"],
         "field_category": field_category,
         "latest_observation": latest_observation,
         "transition_analysis": transition,
         "field_indicators": field_indicators,
         "harvest_prediction": harvest,
         "time_series": time_series,
+        "source_fields": source_fields,
     }
 
 

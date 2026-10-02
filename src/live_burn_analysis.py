@@ -18,6 +18,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+from .field_grouping import combined_geometry, group_summary
+
 import ee
 import pandas as pd
 
@@ -56,22 +58,9 @@ def _initialize_earth_engine() -> None:
 
 
 def _load_field_geometry(field_id: str) -> dict[str, Any]:
-    if not GEOJSON_PATH.exists():
-        raise FileNotFoundError(f"Sangrur GeoJSON not found: {GEOJSON_PATH}")
+    """Load the selected field geometry, combining all matching source years."""
 
-    with GEOJSON_PATH.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
-
-    for feature in data.get("features", []):
-        properties = feature.get("properties") or {}
-        candidate = properties.get("field_id") or properties.get("id")
-        if str(candidate).strip() == str(field_id).strip():
-            geometry = feature.get("geometry")
-            if not geometry:
-                raise ValueError(f"Field {field_id} has no geometry")
-            return geometry
-
-    raise KeyError(f"Field '{field_id}' was not found in Sangrur GeoJSON")
+    return combined_geometry(field_id, str(GEOJSON_PATH))
 
 
 def _mask_and_indices(image: ee.Image) -> ee.Image:
@@ -338,10 +327,14 @@ def analyze_live_burn(field_id: str) -> dict[str, Any]:
     series = _fetch_current_series(normalized_id)
     signals = _score_burn_signals(series)
     latest = series[-1] if series else None
+    field_group = group_summary(normalized_id, str(GEOJSON_PATH))
 
     return {
         "success": True,
         "field_id": normalized_id,
+        "source_field_ids": field_group["source_field_ids"],
+        "source_field_count": field_group["source_field_count"],
+        "geometry_mode": field_group["geometry_mode"],
         "analysis_type": "live Sentinel-2 burn spectral assessment",
         "burn_likelihood": signals["label"],
         "signal_strength": signals["score"],
@@ -365,6 +358,8 @@ def analyze_live_burn(field_id: str) -> dict[str, Any]:
             "scale_meters": REDUCE_SCALE,
             "bands": ["B4", "B8", "B11", "B12"],
             "indices": ["NDVI", "NBR", "NBR2", "SWIR2_NIR_RATIO"],
+            "source_field_ids": field_group["source_field_ids"],
+            "geometry_mode": field_group["geometry_mode"],
         },
         "validation_note": (
             "This is a live Sentinel-2 spectral burn-related signal assessment, "
