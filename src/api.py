@@ -101,12 +101,24 @@ app = FastAPI(
 )
 
 
+# Keep localhost origins for development and allow the deployed React
+# frontend through FRONTEND_URL / FRONTEND_URLS on Render.
+_local_frontend_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+_configured_frontend_origins = [
+    value.strip()
+    for value in os.getenv("FRONTEND_URLS", os.getenv("FRONTEND_URL", "")).split(",")
+    if value.strip()
+]
+_allowed_frontend_origins = list(
+    dict.fromkeys(_local_frontend_origins + _configured_frontend_origins)
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_allowed_frontend_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

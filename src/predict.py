@@ -65,10 +65,11 @@ transform = transforms.Compose([
 
 def create_backbone():
 
-    weights = models.ResNet18_Weights.DEFAULT
-
+    # The trained checkpoint already contains the ResNet18 parameters.
+    # Do not download ImageNet weights at Render runtime; that would add
+    # an unnecessary network dependency and slow first-request model loading.
     model = models.resnet18(
-        weights=weights
+        weights=None
     )
 
     feature_size = model.fc.in_features

@@ -38,6 +38,16 @@ EE_PROJECT = os.getenv(
     "project-18808c04-2093-4bb1-940",
 )
 
+# Render runs without the developer's local Earth Engine credentials.
+# When a service-account email is configured, authenticate with the private
+# key stored as a Render Secret File. Without these variables, preserve the
+# existing local ee.Initialize() behavior for development on the user's PC.
+EE_SERVICE_ACCOUNT = os.getenv("EARTH_ENGINE_SERVICE_ACCOUNT", "").strip()
+EE_PRIVATE_KEY_FILE = os.getenv(
+    "EARTH_ENGINE_PRIVATE_KEY_FILE",
+    "/etc/secrets/earth-engine-key.json",
+).strip()
+
 COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 DEFAULT_LOOKBACK_DAYS = 120
 DEFAULT_MAX_CLOUD_PERCENT = 40
@@ -68,12 +78,38 @@ def initialize_earth_engine() -> None:
             return
 
         try:
-            ee.Initialize(project=EE_PROJECT)
+            if EE_SERVICE_ACCOUNT:
+                if not os.path.isfile(EE_PRIVATE_KEY_FILE):
+                    raise FileNotFoundError(
+                        f"Earth Engine private key file not found: {EE_PRIVATE_KEY_FILE}"
+                    )
+
+                credentials = ee.ServiceAccountCredentials(
+                    EE_SERVICE_ACCOUNT,
+                    EE_PRIVATE_KEY_FILE,
+                )
+                ee.Initialize(
+                    credentials=credentials,
+                    project=EE_PROJECT,
+                )
+            else:
+                # Local development fallback. This uses the credentials created
+                # by ee.Authenticate()/earthengine authenticate on the developer PC.
+                ee.Initialize(project=EE_PROJECT)
         except Exception as exc:
+            if EE_SERVICE_ACCOUNT:
+                raise SatelliteServiceError(
+                    "Google Earth Engine service-account authentication failed. "
+                    "Verify EARTH_ENGINE_SERVICE_ACCOUNT, the Render Secret File "
+                    f"at '{EE_PRIVATE_KEY_FILE}', and project '{EE_PROJECT}'. "
+                    f"Original error: {exc}"
+                ) from exc
+
             raise SatelliteServiceError(
                 "Google Earth Engine is not initialized for the API process. "
-                "Run Earth Engine authentication for this Windows account and "
-                f"make sure project '{EE_PROJECT}' is available. Original error: {exc}"
+                "For local development, authenticate this Windows account with "
+                "Earth Engine. For Render, configure the service-account variables "
+                f"and project '{EE_PROJECT}'. Original error: {exc}"
             ) from exc
 
         _initialized = True
