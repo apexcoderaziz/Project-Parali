@@ -1,0 +1,21 @@
+# Project Parali — FastAPI + Sentinel-2 + Live Dual CNN runtime
+# Recommended deployment runtime: Python 3.11
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+python-multipart>=0.0.20,<1.0
+
+pandas>=2.2,<3.0
+numpy>=2.1,<3.0
+
+# Google Earth Engine
+earthengine-api>=1.6,<2.0
+
+# Live Sentinel-2 scene rendering
+requests>=2.32,<3.0
+rasterio>=1.4,<2.0
+Pillow>=11,<13
+
+# Dual RGB + SWIR ResNet18 inference
+torch>=2.6,<3.0
+torchvision>=0.21,<1.0
