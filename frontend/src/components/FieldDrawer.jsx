@@ -1,4 +1,5 @@
 import {
+  BrainCircuit,
   Building2,
   CalendarDays,
   ChevronDown,
@@ -805,6 +806,103 @@ function FieldDrawer({
                           )
                         )}
                       </div>
+
+                      {liveBurn?.ml_model && (
+                        <div
+                          className="biomass-module"
+                          style={{ marginTop: "14px" }}
+                        >
+                          <div
+                            className="biomass-module-toggle"
+                            style={{ cursor: "default" }}
+                          >
+                            <span className="biomass-module-icon">
+                              <BrainCircuit size={15} />
+                            </span>
+                            <span className="biomass-module-heading">
+                              <small>ML MODEL EVIDENCE</small>
+                              <strong>Dual RGB + SWIR ResNet18</strong>
+                            </span>
+                            <span
+                              className="live-module-badge"
+                              style={{ marginLeft: "auto" }}
+                            >
+                              {liveBurn.ml_model.available ? "LIVE ML" : "UNAVAILABLE"}
+                            </span>
+                          </div>
+
+                          {liveBurn.ml_model.available ? (
+                            <>
+                              <div className="biomass-highlight">
+                                <div>
+                                  <span>Model prediction</span>
+                                  <strong>
+                                    {liveBurn.ml_model.prediction || "N/A"}
+                                  </strong>
+                                </div>
+                                <div className="biomass-highlight-badge">
+                                  {liveBurn.ml_model.confidence_percent != null
+                                    ? `${formatValue(
+                                        liveBurn.ml_model.confidence_percent,
+                                        1
+                                      )}% confidence`
+                                    : "Model score available"}
+                                </div>
+                              </div>
+
+                              <div className="biomass-metric-grid">
+                                <MetricCard
+                                  label="Burn model score"
+                                  value={
+                                    liveBurn.ml_model.softmax_burn_score_percent !=
+                                    null
+                                      ? `${formatValue(
+                                          liveBurn.ml_model.softmax_burn_score_percent,
+                                          1
+                                        )}%`
+                                      : "N/A"
+                                  }
+                                  icon={TrendingUp}
+                                />
+                                <MetricCard
+                                  label="Scene date"
+                                  value={
+                                    liveBurn.ml_model.scene_date ||
+                                    "N/A"
+                                  }
+                                  icon={CalendarDays}
+                                />
+                                <MetricCard
+                                  label="Input bands"
+                                  value="B2 B3 B4 B8 B11 B12"
+                                  icon={Satellite}
+                                />
+                                <MetricCard
+                                  label="Geometry"
+                                  value={
+                                    formatLabel(
+                                      liveBurn.ml_model.geometry_mode
+                                    )
+                                  }
+                                  icon={Target}
+                                />
+                              </div>
+
+                              <p className="biomass-note">
+                                {liveBurn.ml_model.training_domain_warning ||
+                                  "The ML result is independent model evidence and is not a calibrated Sentinel-2 probability."}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="biomass-note">
+                              Live CNN evidence is currently unavailable.
+                              {liveBurn.ml_model.error
+                                ? ` ${liveBurn.ml_model.error}`
+                                : ""}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       <p className="biomass-note">
                         {liveBurn.validation_note ||

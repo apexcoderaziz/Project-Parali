@@ -1,124 +1,187 @@
-import React, {
-  useEffect,
-  useState
-} from "react";
-
 import {
   CheckCircle2,
   Flame,
   LoaderCircle,
-  Sparkles
+  Satellite
 } from "lucide-react";
+import { useEffect, useState } from "react";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://127.0.0.1:8000";
 
-function BurnResult({ result }) {
+function SignalResult({ result }) {
   if (!result) {
     return null;
   }
 
-  const likelihood =
-    String(
-      result.burn_likelihood ??
-      result.status ??
-      ""
-    ).toLowerCase();
+  const status = String(result.status || "").toLowerCase();
+  const isStrong = status === "burn_signal";
+  const isPossible = status === "possible_burn_signal";
+  const isInsufficient = status === "insufficient_data";
 
-  const isBurnSignal =
-    likelihood.includes("high") ||
-    likelihood.includes("strong") ||
-    likelihood.includes("burn");
+  const resultClass = isStrong || isPossible
+    ? "burn-result burn-result-danger"
+    : "burn-result burn-result-safe";
 
-  const latest =
-    result.latest_observation || {};
+  const icon = isStrong || isPossible
+    ? <Flame size={23} />
+    : <CheckCircle2 size={23} />;
 
-  const signals =
-    result.signals || {};
+  const ml = result.ml_model || null;
+  const mlAvailable = ml?.available === true;
 
   return (
-    <div
-      className={
-        isBurnSignal
-          ? "burn-result burn-result-danger"
-          : "burn-result burn-result-safe"
-      }
-    >
+    <div className={resultClass}>
       <div className="burn-result-header">
         <div className="burn-result-icon">
-          {isBurnSignal ? (
-            <Flame size={23} />
-          ) : (
-            <CheckCircle2 size={23} />
-          )}
+          {icon}
         </div>
 
         <div>
           <span>Live Sentinel-2 assessment</span>
-
           <h3>
-            {result.status_label ||
-              result.burn_likelihood ||
-              result.status ||
-              "Assessment available"}
+            {result.status_label || "Assessment available"}
           </h3>
         </div>
       </div>
 
       <div className="burn-result-metrics">
         <div>
-          <span>Signal strength</span>
+          <span>Spectral signal</span>
           <strong>
-            {result.signal_strength != null
-              ? `${result.signal_strength}`
-              : "N/A"}
+            {result.signal_strength ?? "N/A"}
+            {result.signal_strength != null ? "/100" : ""}
           </strong>
         </div>
 
         <div>
-          <span>Latest NDVI</span>
-          <strong>
-            {latest.ndvi ?? "N/A"}
-          </strong>
+          <span>Latest observation</span>
+          <strong>{result.as_of_date || "N/A"}</strong>
         </div>
 
         <div>
-          <span>Latest NBR</span>
-          <strong>
-            {latest.nbr ?? "N/A"}
-          </strong>
+          <span>Observations</span>
+          <strong>{result.observations ?? "N/A"}</strong>
         </div>
       </div>
 
       <div className="burn-result-note">
+        {isInsufficient
+          ? "More usable Sentinel-2 observations are required for a live spectral assessment."
+          : "The spectral layer is a satellite-derived burn-related signal, not a calibrated probability or confirmed burn event."}
+      </div>
+
+      {(result.reasons || []).length > 0 && (
+        <div className="burn-live-reasons">
+          <strong>Satellite evidence</strong>
+
+          <ul>
+            {result.reasons.map((reason, index) => (
+              <li key={`${reason}-${index}`}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {result.signals && (
+        <div className="burn-result-metrics">
+          <div>
+            <span>NBR decline</span>
+            <strong>{result.signals.nbr_drop_from_reference ?? "N/A"}</strong>
+          </div>
+
+          <div>
+            <span>NDVI decline</span>
+            <strong>{result.signals.ndvi_drop_from_reference ?? "N/A"}</strong>
+          </div>
+
+          <div>
+            <span>SWIR2/NIR increase</span>
+            <strong>{result.signals.swir2_nir_ratio_increase ?? "N/A"}</strong>
+          </div>
+        </div>
+      )}
+
+      <div className="burn-ml-card">
+        <div className="burn-ml-card-header">
+          <div>
+            <span>INDEPENDENT ML EVIDENCE</span>
+            <strong>Dual RGB + SWIR ResNet18</strong>
+          </div>
+
+          <span className={mlAvailable ? "burn-ml-status is-ready" : "burn-ml-status"}>
+            {mlAvailable ? "LIVE ML READY" : "ML UNAVAILABLE"}
+          </span>
+        </div>
+
+        {mlAvailable ? (
+          <>
+            <div className="burn-result-metrics">
+              <div>
+                <span>Prediction</span>
+                <strong>{ml.prediction || "N/A"}</strong>
+              </div>
+
+              <div>
+                <span>Confidence</span>
+                <strong>
+                  {ml.confidence_percent != null
+                    ? `${ml.confidence_percent}%`
+                    : "N/A"}
+                </strong>
+              </div>
+
+              <div>
+                <span>Burn score</span>
+                <strong>
+                  {ml.softmax_burn_score_percent != null
+                    ? `${ml.softmax_burn_score_percent}%`
+                    : "N/A"}
+                </strong>
+              </div>
+            </div>
+
+            <div className="burn-result-note">
+              {ml.score_interpretation ||
+                "CNN output is model evidence, not a calibrated live Sentinel-2 probability."}
+            </div>
+          </>
+        ) : (
+          <div className="burn-result-note">
+            {ml?.error ||
+              "The Sentinel-2 spectral analysis completed, but the live CNN bridge was unavailable for this request."}
+          </div>
+        )}
+      </div>
+
+      <div className="burn-result-note">
         {result.validation_note ||
-          "This is a live Sentinel-2 spectral/temporal burn indicator, not a calibrated probability or confirmed burn event."}
+          "Live Sentinel-2 burn assessment with known limitations."}
       </div>
     </div>
   );
 }
 
-function BurnDetector({
-  fieldId,
-  fieldData
-}) {
+function BurnDetector({ fieldId, fieldData }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [fieldRefreshKey, setFieldRefreshKey] = useState(0);
+
+  const selectedFieldId = String(
+    fieldData?.field_id || fieldId || ""
+  ).trim();
 
   useEffect(() => {
-    let cancelled = false;
-
-    const normalizedFieldId =
-      String(fieldId || "").trim();
-
-    if (!normalizedFieldId) {
+    if (!selectedFieldId || !fieldData) {
       setResult(null);
       setError("");
       return undefined;
     }
 
-    const loadBurnAnalysis = async () => {
+    const controller = new AbortController();
+
+    const loadLiveBurnAnalysis = async () => {
       setLoading(true);
       setError("");
       setResult(null);
@@ -126,8 +189,11 @@ function BurnDetector({
       try {
         const response = await fetch(
           `${API_URL}/live-burn-analysis/${encodeURIComponent(
-            normalizedFieldId
-          )}`
+            selectedFieldId
+          )}`,
+          {
+            signal: controller.signal
+          }
         );
 
         const data = await response.json();
@@ -135,46 +201,37 @@ function BurnDetector({
         if (!response.ok) {
           throw new Error(
             data.detail ||
-            "Live burn analysis failed"
+              "Live burn analysis failed"
           );
         }
 
-        if (!cancelled) {
-          setResult(data);
-        }
+        setResult(data);
       } catch (err) {
+        if (err.name === "AbortError") {
+          return;
+        }
+
         console.error(
           "Live burn analysis error:",
           err
         );
 
-        if (!cancelled) {
-          setResult(null);
-          setError(
-            err.message ||
-            "Live burn analysis failed"
-          );
-        }
+        setResult(null);
+        setError(err.message);
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
     };
 
-    loadBurnAnalysis();
+    loadLiveBurnAnalysis();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [fieldId, fieldRefreshKey]);
-
-  const normalizedFieldId =
-    String(fieldId || "").trim();
+    return () => controller.abort();
+  }, [selectedFieldId, fieldData]);
 
   return (
-    <div className="burn-detector">
-
+    <section className="burn-detector">
       <div className="burn-detector-header">
         <div className="burn-detector-icon">
           <Flame size={22} />
@@ -182,89 +239,67 @@ function BurnDetector({
 
         <div>
           <div className="burn-detector-eyebrow">
-            LIVE SATELLITE ANALYSIS
+            LIVE SENTINEL-2 MONITORING
           </div>
 
           <h3>
-            Burn Detection
+            Live Burn Analysis
           </h3>
 
           <p>
-            Analyze the selected field using current
-            Sentinel-2 spectral and temporal signals.
-            No RGB or SWIR image upload is required.
+            Automatically assess burn-related spectral signals
+            from Sentinel-2 for the selected field. No RGB or
+            SWIR image upload is required.
           </p>
         </div>
       </div>
 
       <div className="burn-pair-notice">
-        <Sparkles size={16} />
+        <Satellite size={16} />
 
         <div>
           <strong>
-            Live Sentinel-2 monitoring
+            Automatic satellite analysis
           </strong>
 
           <span>
-            {normalizedFieldId
-              ? `Field ${normalizedFieldId} is being assessed directly from satellite observations.`
-              : "Select a field to start live satellite burn analysis."}
+            {selectedFieldId
+              ? `Analyzing field ${selectedFieldId} using the latest usable Sentinel-2 observations.`
+              : "Select a field on the map to start live burn analysis."}
           </span>
         </div>
       </div>
 
-      <div className="burn-action-row">
-
-        <button
-          type="button"
-          className="burn-analyze-button"
-          disabled={!normalizedFieldId || loading}
-          onClick={() => {
-            setFieldRefreshKey((value) => value + 1);
-          }}
-        >
-          {loading ? (
-            <>
-              <LoaderCircle
-                size={17}
-                className="burn-spinner"
-              />
-              Analyzing satellite...
-            </>
-          ) : (
-            <>
-              <Flame size={17} />
-              Refresh burn analysis
-            </>
-          )}
-        </button>
-
-        {!normalizedFieldId ? (
-          <span className="burn-action-hint">
-            Select a field to continue
-          </span>
-        ) : loading ? (
-          <span className="burn-action-hint">
-            Examining Sentinel-2 observations
-          </span>
-        ) : (
+      {loading && (
+        <div className="burn-action-row">
           <span className="burn-action-ready">
-            <CheckCircle2 size={14} />
-            Live satellite assessment ready
+            <LoaderCircle
+              size={15}
+              className="burn-spinner"
+            />
+            Fetching live Sentinel-2 observations...
           </span>
-        )}
+        </div>
+      )}
 
-      </div>
-
-      {error && (
+      {!loading && error && (
         <div className="burn-error">
           {error}
         </div>
       )}
 
-      <BurnResult result={result} />
+      {!loading && !error && !selectedFieldId && (
+        <div className="burn-action-row">
+          <span className="burn-action-hint">
+            Select a field to continue.
+          </span>
+        </div>
+      )}
 
-    </div>
+      {!loading && !error && result && (
+        <SignalResult result={result} />
+      )}
+    </section>
   );
 }
 

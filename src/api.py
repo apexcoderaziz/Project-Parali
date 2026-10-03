@@ -22,11 +22,6 @@ except ImportError:
     from field_grouping import group_summary, resolve_field_ids
 
 try:
-    from .field_context import resolve_field_context
-except ImportError:
-    from field_context import resolve_field_context
-
-try:
     from .logistics_estimation import estimate_logistics
 except ImportError:
     from logistics_estimation import estimate_logistics
@@ -119,12 +114,32 @@ app.add_middleware(
 
 
 # =========================================================
-# LOAD BURN MODEL
+# BURN MODEL
 # =========================================================
 
-print("Loading Project Parali burn model...")
-model = load_model()
-print("Project Parali burn model ready!")
+# Keep the API startup lightweight. The trained CNN is loaded lazily so
+# /fields, /field-analysis and the other data endpoints can respond even
+# when model initialization or local TorchVision weights take longer.
+model = None
+_model_lock = None
+
+
+def get_burn_model():
+    """Load the trained burn model only when a CNN request needs it."""
+    global model, _model_lock
+
+    if model is not None:
+        return model
+
+    if _model_lock is None:
+        import threading
+        _model_lock = threading.Lock()
+
+    with _model_lock:
+        if model is None:
+            model = load_model()
+
+    return model
 
 
 # =========================================================
@@ -538,6 +553,7 @@ def health():
     return {
         "status": "healthy",
         "burn_model_loaded": model is not None,
+        "burn_model_load_mode": "lazy",
         "harvest_prediction_available": os.path.exists(
             TIMESERIES_PATH
         ),
@@ -596,7 +612,7 @@ async def predict_burn(
             shutil.copyfileobj(swir_image.file, buffer)
 
         result = predict(
-            model,
+            get_burn_model(),
             rgb_path,
             swir_path,
         )
@@ -827,10 +843,29 @@ def model_info():
             "status": "transparent Sentinel-2 NDVI/NBR signal assessment; not a calibrated probability",
         },
         "live_burn_analysis": {
-            "model": "Sentinel-2 spectral burn-signal MVP",
-            "task": "Field-level live burn / post-burn spectral assessment",
-            "status": "transparent Sentinel-2 spectral-signal assessment; not a calibrated probability",
-            "inputs": ["B4 Red", "B8 NIR", "B11 SWIR1", "B12 SWIR2", "NDVI", "NBR"],
+            "models": [
+                "Sentinel-2 spectral burn-signal assessment",
+                "Dual RGB + SWIR ResNet18 live model evidence",
+            ],
+            "task": "Field-level live burn / post-burn assessment",
+            "status": (
+                "Spectral signals and the existing CNN are reported as separate "
+                "pieces of evidence; neither is presented as a calibrated Sentinel-2 probability."
+            ),
+            "spectral_inputs": [
+                "B4 Red",
+                "B8 NIR",
+                "B11 SWIR1",
+                "B12 SWIR2",
+                "NDVI",
+                "NBR",
+                "NBR2",
+                "SWIR2/NIR",
+            ],
+            "ml_input_rendering": {
+                "rgb": ["B4", "B3", "B2"],
+                "swir": ["B12", "B11", "B8"],
+            },
         },
     }
 
@@ -845,8 +880,9 @@ def live_burn_analysis(field_id: str):
     Analyze the selected field using the latest usable Sentinel-2 imagery.
 
     This route is separate from /predict. The existing /predict endpoint
-    remains the manual RGB + SWIR CNN workflow. This route uses live
-    Sentinel-2 spectral observations and transparent burn-signal rules.
+    remains the manual RGB + SWIR CNN workflow. This route adds live
+    Sentinel-2 spectral observations and runs the existing CNN on a
+    Sentinel-2-rendered RGB/SWIR representation when available.
     """
     try:
         return analyze_live_burn(field_id)
@@ -908,11 +944,8 @@ def field_analysis(field_id: str):
     requested_field_id = clean_field_id(field_id)
 
     try:
-        field_context = resolve_field_context(
-            requested_field_id,
-            GEOJSON_PATH,
-        )
-        source_field_ids = field_context["source_field_ids"]
+        summary = group_summary(requested_field_id, GEOJSON_PATH)
+        source_field_ids = summary["source_field_ids"]
     except (ValueError, KeyError, FileNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -930,20 +963,39 @@ def field_analysis(field_id: str):
     # ---------------------------------------------------------
     # Source-year field information
     # ---------------------------------------------------------
-    # The shared field context has already resolved the logical ID and loaded
-    # the matching source-year features. Reuse that context instead of making
-    # every downstream feature read its own copy of the GeoJSON.
-    categories = list(field_context.get("categories") or [])
-    source_fields = [
-        {
-            "field_id": item.get("field_id"),
-            "source_year": item.get("source_year"),
-            "field_name": item.get("field_name"),
-            "category": item.get("category"),
-            "original_field_id": item.get("original_field_id"),
-        }
-        for item in field_context.get("source_fields", [])
-    ]
+    source_features = []
+    geojson = load_geojson()
+
+    for feature in geojson.get("features", []):
+        properties = feature.get("properties") or {}
+        source_id = clean_field_id(
+            properties.get("field_id")
+            or properties.get("id")
+            or properties.get("ID")
+            or properties.get("Id")
+        )
+        if source_id in source_field_ids:
+            source_features.append(feature)
+
+    categories = []
+    source_fields = []
+
+    for feature in source_features:
+        properties = feature.get("properties") or {}
+        category = (
+            properties.get("field_category")
+            or properties.get("category")
+        )
+        if category is not None:
+            categories.append(str(category))
+
+        source_fields.append({
+            "field_id": clean_field_id(properties.get("field_id")),
+            "source_year": properties.get("source_year"),
+            "field_name": properties.get("field_name"),
+            "category": category,
+            "original_field_id": properties.get("original_field_id"),
+        })
 
     if len(source_field_ids) == 1:
         field_category = categories[0] if categories else None
@@ -1144,7 +1196,7 @@ def field_analysis(field_id: str):
         "field_id": requested_field_id,
         "source_field_ids": source_field_ids,
         "source_field_count": len(source_field_ids),
-        "geometry_mode": field_context["geometry_mode"],
+        "geometry_mode": summary["geometry_mode"],
         "field_category": field_category,
         "latest_observation": latest_observation,
         "transition_analysis": transition,

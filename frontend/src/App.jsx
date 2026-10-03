@@ -36,7 +36,38 @@ import FieldDrawer from "./components/FieldDrawer.jsx";
 import MapLegend from "./components/MapLegend.jsx";
 import BurnDetector from "./components/BurnDetector.jsx";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://127.0.0.1:8000";
+
+const API_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    API_TIMEOUT_MS
+  );
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+
+    return response;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(
+        `Request timed out after ${API_TIMEOUT_MS / 1000}s. Check that the Project Parali API is running at ${API_URL}.`
+      );
+    }
+
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 
 function FieldAreaDeclineChart({ data }) {
@@ -350,7 +381,7 @@ function App() {
       setMapError("");
 
       try {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${API_URL}/fields`
         );
 
@@ -399,7 +430,7 @@ function App() {
     setHarvestPrediction(null);
 
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${API_URL}/live-harvest-prediction/${encodeURIComponent(
           normalizedFieldId
         )}`
@@ -457,7 +488,7 @@ function App() {
           normalizedFieldId
         );
 
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${API_URL}/field-analysis/${encodedFieldId}`
       );
 
@@ -472,7 +503,10 @@ function App() {
 
       setFieldData(data);
 
-      await loadHarvestPrediction(
+      // Do not block the field analysis UI on the live Sentinel-2
+      // harvest request. The field data can render independently while
+      // the live harvest layer loads in the background.
+      void loadHarvestPrediction(
         normalizedFieldId
       );
     } catch (error) {
