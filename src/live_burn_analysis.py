@@ -77,6 +77,9 @@ LOOKBACK_DAYS = 120
 MAX_CLOUD_PERCENT = 40
 REDUCE_SCALE = 10
 ML_REQUEST_TIMEOUT_SECONDS = 60
+# Keep the live CNN Earth Engine request bounded. A full-resolution polygon
+# download can exceed Earth Engine's 48 MB download-request limit.
+ML_CHIP_DIMENSIONS = "512x512"
 
 _MODEL_LOCK = threading.Lock()
 _LIVE_MODEL = None
@@ -309,11 +312,16 @@ def _download_latest_sentinel_scene(field_id: str, destination: str) -> dict[str
     scene_id = image.get("PRODUCT_ID").getInfo()
     cloud_pct = image.get("CLOUDY_PIXEL_PERCENTAGE").getInfo()
 
+    # IMPORTANT: Do not request the entire field at native 10 m resolution.
+    # Large logical/combined field geometries can produce hundreds of MB and
+    # exceed Earth Engine's 48 MB getDownloadURL request limit. The CNN later
+    # resizes both inputs to 224x224, so a bounded 512x512 scene chip is
+    # sufficient for the existing model interface.
     download_url = image.getDownloadURL(
         {
             "bands": ["B2", "B3", "B4", "B8", "B11", "B12"],
             "region": geometry,
-            "scale": REDUCE_SCALE,
+            "dimensions": ML_CHIP_DIMENSIONS,
             "filePerBand": False,
             "format": "GEO_TIFF",
         }
