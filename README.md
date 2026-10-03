@@ -70,7 +70,7 @@ Project Parali is designed to connect these pieces into one field-centric system
                  └──────────┬───────────┘
                             ↓
                  ┌──────────────────────┐
-                 │ Estimated Net Profit│
+                 │ Estimated Net Profit │
                  └──────────┬───────────┘
                             ↓
                  ┌──────────────────────┐
@@ -78,7 +78,6 @@ Project Parali is designed to connect these pieces into one field-centric system
                  └──────────────────────┘
 ```
 
-This README uses the uploaded project README as the structural starting point, while expanding it around the current field-context, live satellite, biomass, logistics and economics architecture. fileciteturn92file0L8-L40
 
 ---
 
@@ -611,9 +610,14 @@ Actual harvest-date prediction requires validated field-level harvest-date groun
 
 # 🔥 7. Live Burn Intelligence
 
-The live burn system is field-driven.
+The live burn system is field-driven and does not require the user to upload images for field-level analysis.
 
-The user does not need to upload images simply to inspect a selected field's live satellite burn signals.
+The current implementation reports **two separate evidence streams**:
+
+1. Transparent field-level Sentinel-2 spectral evidence.
+2. Independent evidence from the existing Dual RGB + SWIR ResNet18 model.
+
+The two signals are intentionally kept separate. The system does not invent an arbitrary weighted fusion between them.
 
 ## Live field analysis
 
@@ -624,14 +628,26 @@ Field Context
      ↓
 Combined Geometry
      ↓
-Live Sentinel-2 Observations
-     ↓
-Burn-Related Spectral Evidence
-     ↓
-Field Burn Intelligence
+Latest usable Sentinel-2 scene
+     ├───────────────────────────────┐
+     ↓                               ↓
+Spectral Field Analysis        Live CNN Scene Chip
+     ↓                               ↓
+NDVI / NBR / SWIR trends       B2/B3/B4/B8/B11/B12
+     ↓                               ↓
+Burn-related signal            RGB + SWIR rendering
+                                     ↓
+                              Dual RGB + SWIR ResNet18
+                                     ↓
+                                Independent ML Evidence
+     └───────────────┬───────────────┘
+                     ↓
+              Live Burn Intelligence
 ```
 
-The live analysis can consider:
+### Spectral evidence
+
+The field-level spectral analysis can consider:
 
 ```text
 NDVI change
@@ -644,7 +660,72 @@ Trend context
 Historical field information
 ```
 
-The frontend presents this as evidence with supporting reasons.
+### Live CNN evidence
+
+The existing Dual RGB + SWIR ResNet18 can also be executed against the latest usable Sentinel-2 scene.
+
+For live rendering, the system requests:
+
+```text
+B2  → Blue
+B3  → Green
+B4  → Red
+B8  → NIR
+B11 → SWIR1
+B12 → SWIR2
+```
+
+The rendered model inputs are:
+
+```text
+RGB
+→ B4 / B3 / B2
+
+SWIR false-colour representation
+→ B12 / B11 / B8
+```
+
+### Bounded Sentinel-2 scene extraction
+
+A full-resolution download of a large logical field can exceed Earth Engine's download-request limit. The live CNN path therefore uses a bounded:
+
+```text
+512 × 512
+```
+
+Sentinel-2 scene representation for model rendering.
+
+The model inference pipeline then resizes its image inputs to the model's expected input size.
+
+This bounded chip is used for the **live CNN bridge only**. The field-level spectral analysis continues to operate on the resolved field geometry.
+
+### Availability behavior
+
+The spectral analysis should remain available even when the optional live CNN rendering path cannot run.
+
+Live CNN rendering requires:
+
+```text
+requests
+rasterio
+Pillow
+```
+
+and the existing model artifact.
+
+When those dependencies or the model bridge are unavailable, the API returns the spectral intelligence and marks the ML evidence as unavailable rather than failing the entire burn-analysis response.
+
+### Interpretation
+
+The live spectral score is a transparent field-level burn-related signal assessment.
+
+The CNN result is:
+
+```text
+Independent ML evidence
+```
+
+It is **not** a calibrated Sentinel-2 probability because the existing CNN was trained on a separate RGB + SWIR image dataset.
 
 ---
 
@@ -721,7 +802,7 @@ Dual CNN Accuracy: 91.76%
 Dual CNN F1 Score: 93.45%
 ```
 
-These values are benchmark results on the evaluated image dataset, not measured accuracy on the Sangrur Sentinel-2 field dataset. The sample README explicitly makes this distinction. fileciteturn92file0L115-L150
+These values are benchmark results on the evaluated image dataset, not measured accuracy on the Sangrur Sentinel-2 field dataset. These are benchmark results on the evaluated image dataset.
 
 ---
 
@@ -734,14 +815,23 @@ Project Parali supports two conceptually different burn workflows.
 ```text
 Field ID
    ↓
+Field Context
+   ↓
 Sentinel-2
-   ↓
-Spectral evidence
-   ↓
-Live field assessment
+   ├── Field-level spectral analysis
+   │       ↓
+   │   NDVI / NBR / SWIR evidence
+   │
+   └── Bounded 512×512 scene chip
+           ↓
+        RGB + SWIR render
+           ↓
+      Dual RGB + SWIR ResNet18
+           ↓
+      Independent ML evidence
 ```
 
-This is the field-oriented workflow.
+This is the field-oriented live workflow.
 
 ## B. Manual image inference
 
@@ -755,9 +845,9 @@ Dual CNN
 No Burn / Burn
 ```
 
-This is the model-inference workflow.
+This remains the explicit model-inference workflow where the user supplies the RGB and SWIR inputs.
 
-Keeping them separate prevents the UI from implying that the image-trained model is a native Sentinel-2 four-band model.
+Keeping the workflows separate prevents the UI from implying that the image-trained model is a natively trained Sentinel-2 four-band field model.
 
 ---
 
@@ -1089,7 +1179,7 @@ The complete operational chain is:
 └──────────┬──────────┘
            ↓
 ┌─────────────────────┐
-│ Estimated Net Profit│
+│ Estimated Net Profit │
 └─────────────────────┘
 ```
 
@@ -1147,7 +1237,7 @@ Training scripts remain outside the runtime API path.
 | `field_context.py` | Resolve logical field → source fields + geometry + metadata |
 | `satellite_service.py` | Shared Sentinel-2/GEE observations and spectral features |
 | `harvest_prediction.py` | Crop-transition / harvest-window signal analysis |
-| `live_burn_analysis.py` | Live satellite burn intelligence |
+| `live_burn_analysis.py` | Live Sentinel-2 spectral burn intelligence + independent Dual CNN evidence |
 | `residue_estimation.py` | Estimated residue and recoverable biomass |
 | `biomass_opportunity.py` | Facility matching and biomass opportunity |
 | `biomass_clustering.py` | Spatial collection grouping |
@@ -1345,7 +1435,7 @@ Returns live crop-transition / harvest-window assessment.
 
 ### `GET /live-burn-analysis/{field_id}`
 
-Returns field-driven live burn intelligence based on satellite evidence and available ML evidence.
+Returns field-driven live burn intelligence based on Sentinel-2 spectral evidence and, when the live scene-rendering path is available, independent Dual CNN evidence.
 
 ---
 
@@ -1548,6 +1638,16 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+### Live CNN rendering dependencies
+
+The live burn spectral analysis can operate independently, but live Sentinel-2 CNN rendering also requires:
+
+```powershell
+pip install requests rasterio pillow
+```
+
+These packages are used to download, read and render the bounded Sentinel-2 scene chip before passing RGB and SWIR images to the existing Dual RGB + SWIR ResNet18 model.
+
 Run FastAPI:
 
 ```powershell
@@ -1742,6 +1842,18 @@ Test:
 /logistics-estimation/34
 ```
 
+For `/live-burn-analysis/34`, verify that:
+
+```text
+Spectral evidence
++
+ml_model
+```
+
+are returned independently.
+
+When live CNN dependencies and the model are available, `ml_model.available` should be `true`. If the optional rendering path fails, the endpoint should still return the spectral burn analysis with `ml_model.available` set to `false`.
+
 ## Level 4 — End-to-end UI
 
 Test:
@@ -1783,6 +1895,10 @@ Before deployment:
 [ ] Satellite failures are handled gracefully
 [ ] Harvest module responds
 [ ] Burn module responds
+[ ] Live burn spectral evidence is returned
+[ ] Live CNN rendering dependencies are installed
+[ ] Live CNN scene extraction stays within the bounded chip configuration
+[ ] Live CNN evidence is reported independently from spectral evidence
 [ ] Residue module responds
 [ ] Opportunity module responds
 [ ] Cluster module responds
@@ -2149,11 +2265,11 @@ This approach keeps the system interpretable and makes future model replacement 
 
 ## 1. Burn-model domain limitation
 
-The reported Dual CNN benchmark comes from the crop-burn image dataset and has not been established as equivalent accuracy on raw Sangrur Sentinel-2 field data. fileciteturn92file0L154-L183
+The reported Dual CNN benchmark comes from the crop-burn image dataset and has not been established as equivalent accuracy on raw Sangrur Sentinel-2 field data.
 
 ## 2. Harvest-date limitation
 
-Current transition dates are candidate dates derived from vegetation patterns; they are not validated harvest dates unless supported by field-level ground truth. fileciteturn92file0L203-L224
+Current transition dates are candidate dates derived from vegetation patterns; they are not validated harvest dates unless supported by field-level ground truth.
 
 ## 3. Biomass estimation limitation
 
@@ -2187,7 +2303,15 @@ Estimated road distance
 
 is not necessarily equivalent to an actual truck navigation route.
 
-## 7. Economic limitation
+## 7. Live CNN scene-extraction limitation
+
+The live CNN bridge uses a bounded `512×512` Sentinel-2 scene representation instead of requesting the entire selected field at native 10 m resolution.
+
+This protects the live inference path from oversized Earth Engine download requests, but it also means the live CNN input is a bounded/resampled representation of the selected field rather than an unrestricted native-resolution raster covering the entire field.
+
+The field-level spectral analysis remains geometry-based and is reported separately.
+
+## 8. Economic limitation
 
 Current net profit is intentionally limited to:
 
@@ -2325,7 +2449,7 @@ Leaflet
 Field-level analysis
 ```
 
-The uploaded baseline README documents this foundation and its original phase structure. fileciteturn92file0L87-L111
+This foundation forms the current Phase 1 baseline.
 
 ---
 
@@ -2657,6 +2781,22 @@ Satellite Image
 Prediction
 ```
 
+Its live burn pathway explicitly separates field-level spectral intelligence from independent image-model evidence:
+
+```text
+Sentinel-2 Field
+      ↓
+Field Context
+      ↓
+┌────────────────────────────┐
+│ Spectral Evidence          │
+│ +                          │
+│ Independent Dual CNN       │
+└─────────────┬──────────────┘
+              ↓
+        Field Intelligence
+```
+
 It is designed as:
 
 ```text
@@ -2799,6 +2939,35 @@ UTILIZED AS BIOMASS
 Project Parali therefore moves toward:
 
 ## **Satellite Intelligence → Field Intelligence → Biomass Intelligence → Operational Intelligence**
+
+---
+
+# 🆕 57. Live Burn Implementation Update
+
+The current live burn implementation extends the original field-level spectral analysis with an optional live bridge to the existing Dual RGB + SWIR ResNet18 model.
+
+The important runtime design is:
+
+```text
+Logical Field
+     ↓
+Resolved Geometry
+     ↓
+Latest usable Sentinel-2 scene
+     ├── Field-level spectral analysis
+     │
+     └── Bounded 512×512 scene extraction
+                ↓
+          RGB / SWIR rendering
+                ↓
+        Existing Dual RGB + SWIR CNN
+                ↓
+        Independent ML evidence
+```
+
+The bounded scene extraction is an implementation safeguard against oversized Earth Engine download requests. It does not change the model weights or the training dataset.
+
+The live CNN output remains explicitly cross-domain evidence until a Sentinel-2-native burn model is trained and validated.
 
 ---
 
