@@ -963,7 +963,7 @@ function App() {
               </div>
 
               <div>
-                <span>Transition candidates</span>
+                <span>Recorded transition candidates</span>
                 <strong>
                   {dashboardStats.transitionCandidates.toLocaleString()}
                 </strong>
@@ -1127,8 +1127,8 @@ function App() {
 
               <p>
                 These counts summarize the loaded field indicators.
-                They describe observed trends and candidate
-                transitions, not validated outcomes.
+                Trend groups overlap, so the numbers are not meant
+                to add up to the total field count.
               </p>
             </div>
 
@@ -1137,12 +1137,12 @@ function App() {
                 <div className="signal-stat-icon">
                   <TrendingDown size={19} />
                 </div>
-                <span>NDVI decreasing</span>
+                <span>NDVI ↓</span>
                 <strong>
                   {trendStats.ndviDecreasing}
                 </strong>
                 <small>
-                  Fields with a decreasing vegetation trend
+                  Fields whose recorded NDVI trend is decreasing
                 </small>
               </article>
 
@@ -1150,12 +1150,12 @@ function App() {
                 <div className="signal-stat-icon">
                   <Waves size={19} />
                 </div>
-                <span>NBR decreasing</span>
+                <span>NBR ↓</span>
                 <strong>
                   {trendStats.nbrDecreasing}
                 </strong>
                 <small>
-                  Fields with a decreasing NBR trend
+                  Fields whose recorded NBR trend is decreasing
                 </small>
               </article>
 
@@ -1163,12 +1163,12 @@ function App() {
                 <div className="signal-stat-icon">
                   <Target size={19} />
                 </div>
-                <span>Both decreasing</span>
+                <span>Both ↓</span>
                 <strong>
                   {trendStats.bothDecreasing}
                 </strong>
                 <small>
-                  Fields where both indicators are decreasing
+                  Fields recorded as decreasing in both signals
                 </small>
               </article>
 
@@ -1181,9 +1181,22 @@ function App() {
                   {dashboardStats.transitionCandidates}
                 </strong>
                 <small>
-                  Existing candidate-transition indicator
+                  Existing crop-transition indicator in the dataset
                 </small>
               </article>
+            </div>
+
+            <div
+              className="signal-overlap-note"
+              role="note"
+              aria-label="Signal count explanation"
+            >
+              <strong>How to read these counts</strong>
+              <span>
+                A field can appear in NDVI ↓, NBR ↓, and Both ↓ at the
+                same time. “Both ↓” is the overlap between the first two
+                groups; it is not an additional set of fields.
+              </span>
             </div>
 
             <div className="signal-chart-card">
