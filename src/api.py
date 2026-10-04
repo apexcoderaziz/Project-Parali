@@ -101,19 +101,33 @@ app = FastAPI(
 )
 
 
-# Keep localhost origins for development and allow the deployed React
-# frontend through FRONTEND_URL / FRONTEND_URLS on Render.
+# Keep localhost origins for development and explicitly allow the
+# deployed React frontend. Environment variables are still supported
+# so another deployed frontend URL can be added without changing code.
 _local_frontend_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+_production_frontend_origins = [
+    "https://project-parali-frontend.onrender.com",
+]
+
 _configured_frontend_origins = [
-    value.strip()
-    for value in os.getenv("FRONTEND_URLS", os.getenv("FRONTEND_URL", "")).split(",")
+    value.strip().rstrip("/")
+    for value in os.getenv(
+        "FRONTEND_URLS",
+        os.getenv("FRONTEND_URL", ""),
+    ).split(",")
     if value.strip()
 ]
+
 _allowed_frontend_origins = list(
-    dict.fromkeys(_local_frontend_origins + _configured_frontend_origins)
+    dict.fromkeys(
+        _local_frontend_origins
+        + _production_frontend_origins
+        + _configured_frontend_origins
+    )
 )
 
 app.add_middleware(
