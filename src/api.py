@@ -9,11 +9,6 @@ import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-try:
-    from .predict import load_model, predict
-except ImportError:
-    from predict import load_model, predict
-
 from .residue_estimation import estimate_residue
 
 try:
@@ -143,11 +138,37 @@ app.add_middleware(
 # BURN MODEL
 # =========================================================
 
-# Keep the API startup lightweight. The trained CNN is loaded lazily so
-# /fields, /field-analysis and the other data endpoints can respond even
-# when model initialization or local TorchVision weights take longer.
+# Keep the API startup lightweight. PyTorch/predict.py is imported only when
+# a manual CNN inference request actually needs it. This is important for
+# constrained Render instances because importing Torch alone can consume a
+# substantial amount of resident memory even when no CNN endpoint is used.
 model = None
 _model_lock = None
+_predict_module = None
+_predict_module_lock = None
+
+
+def _load_predict_functions():
+    """Import the CNN module lazily and return its load/predict functions."""
+    global _predict_module, _predict_module_lock
+
+    if _predict_module is not None:
+        return _predict_module.load_model, _predict_module.predict
+
+    if _predict_module_lock is None:
+        import threading
+        _predict_module_lock = threading.Lock()
+
+    with _predict_module_lock:
+        if _predict_module is None:
+            try:
+                from . import predict as predict_module
+            except ImportError:
+                import predict as predict_module
+
+            _predict_module = predict_module
+
+    return _predict_module.load_model, _predict_module.predict
 
 
 def get_burn_model():
@@ -163,6 +184,7 @@ def get_burn_model():
 
     with _model_lock:
         if model is None:
+            load_model, _ = _load_predict_functions()
             model = load_model()
 
     return model
@@ -579,7 +601,11 @@ def health():
     return {
         "status": "healthy",
         "burn_model_loaded": model is not None,
-        "burn_model_load_mode": "lazy",
+        "burn_model_load_mode": "true_lazy",
+        "cnn_runtime_note": (
+            "PyTorch is imported only when /predict or an enabled live CNN "
+            "request needs it."
+        ),
         "harvest_prediction_available": os.path.exists(
             TIMESERIES_PATH
         ),
@@ -637,7 +663,8 @@ async def predict_burn(
         with open(swir_path, "wb") as buffer:
             shutil.copyfileobj(swir_image.file, buffer)
 
-        result = predict(
+        _, predict_fn = _load_predict_functions()
+        result = predict_fn(
             get_burn_model(),
             rgb_path,
             swir_path,

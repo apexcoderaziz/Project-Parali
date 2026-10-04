@@ -20,7 +20,6 @@ Important:
 
 from __future__ import annotations
 
-import io
 import os
 import threading
 from datetime import date, timedelta
@@ -29,25 +28,6 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 import ee
-import numpy as np
-import pandas as pd
-try:
-    import requests
-except ImportError:
-    requests = None
-
-try:
-    from PIL import Image
-except ImportError:
-    Image = None
-
-try:
-    import rasterio
-    from rasterio.io import MemoryFile
-except ImportError:
-    rasterio = None
-    MemoryFile = None
-
 try:
     from .field_context import resolve_field_context
 except ImportError:
@@ -64,11 +44,6 @@ except ImportError:
         initialize_earth_engine,
     )
 
-try:
-    from .predict import load_model, predict
-except ImportError:
-    from predict import load_model, predict
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 GEOJSON_PATH = BASE_DIR / "data" / "processed" / "sangrur_fields.geojson"
@@ -80,15 +55,26 @@ REDUCE_SCALE = 10
 # Earth Engine do not spend excessive time moving large raster payloads.
 ML_REQUEST_TIMEOUT_SECONDS = 25
 ML_CHIP_DIMENSIONS = os.getenv("LIVE_BURN_ML_CHIP_DIMENSIONS", "256x256").strip()
-LIVE_BURN_ML_ENABLED = os.getenv("LIVE_BURN_ML_ENABLED", "true").strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
+
+# Render exposes RENDER=true at runtime. The explicit environment variable can
+# still override the default so the same source tree can run the full live CNN
+# locally while keeping the constrained Render deployment spectral-only.
+_render_runtime = os.getenv("RENDER", "").strip().lower() == "true"
+_live_burn_ml_override = os.getenv("LIVE_BURN_ML_ENABLED")
+if _live_burn_ml_override is None:
+    LIVE_BURN_ML_ENABLED = not _render_runtime
+else:
+    LIVE_BURN_ML_ENABLED = _live_burn_ml_override.strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 
 _MODEL_LOCK = threading.Lock()
 _LIVE_MODEL = None
+_PREDICT_MODULE = None
+_PREDICT_MODULE_LOCK = threading.Lock()
 
 
 def _fetch_current_series(field_id: str) -> list[dict[str, Any]]:
@@ -102,6 +88,26 @@ def _fetch_current_series(field_id: str) -> list[dict[str, Any]]:
     )
 
 
+def _load_predict_module():
+    """Import predict.py only when live CNN inference is actually enabled."""
+
+    global _PREDICT_MODULE
+
+    if _PREDICT_MODULE is not None:
+        return _PREDICT_MODULE
+
+    with _PREDICT_MODULE_LOCK:
+        if _PREDICT_MODULE is None:
+            try:
+                from . import predict as predict_module
+            except ImportError:
+                import predict as predict_module
+
+            _PREDICT_MODULE = predict_module
+
+    return _PREDICT_MODULE
+
+
 def _get_live_model():
     """Load and cache the existing Dual RGB + SWIR model on first use."""
 
@@ -112,7 +118,7 @@ def _get_live_model():
 
     with _MODEL_LOCK:
         if _LIVE_MODEL is None:
-            _LIVE_MODEL = load_model()
+            _LIVE_MODEL = _load_predict_module().load_model()
 
     return _LIVE_MODEL
 
@@ -226,8 +232,10 @@ def _score_burn_signals(series: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _percentile_stretch(channel: np.ndarray) -> np.ndarray:
+def _percentile_stretch(channel):
     """Convert a Sentinel reflectance channel into an 8-bit display image."""
+
+    import numpy as np
 
     array = np.asarray(channel, dtype=np.float32)
     finite = array[np.isfinite(array)]
@@ -248,14 +256,17 @@ def _percentile_stretch(channel: np.ndarray) -> np.ndarray:
     return np.rint(stretched * 255.0).astype(np.uint8)
 
 
-def _render_rgb_and_swir(dataset: "rasterio.DatasetReader") -> tuple["Image.Image", "Image.Image"]:
+def _render_rgb_and_swir(dataset):
     """Render RGB and SWIR three-channel images from a six-band Sentinel scene."""
 
-    if rasterio is None or MemoryFile is None or Image is None:
+    try:
+        import numpy as np
+        from PIL import Image
+    except ImportError as exc:
         raise RuntimeError(
-            "Live CNN rendering requires rasterio and Pillow. "
-            "Install them with: pip install rasterio pillow"
-        )
+            "Live CNN rendering requires numpy and Pillow. "
+            "Install them with: pip install numpy pillow"
+        ) from exc
 
     data = dataset.read().astype(np.float32)
 
@@ -285,11 +296,16 @@ def _download_latest_sentinel_scene(
 ) -> tuple[dict[str, Any], str, str]:
     """Download a small, bounded Sentinel-2 scene for live CNN input."""
 
-    if requests is None or rasterio is None or MemoryFile is None or Image is None:
+    try:
+        import requests
+        from PIL import Image
+        import rasterio
+        from rasterio.io import MemoryFile
+    except ImportError as exc:
         raise RuntimeError(
             "Live CNN scene rendering dependencies are missing. "
             "Install them with: pip install requests rasterio pillow"
-        )
+        ) from exc
 
     initialize_earth_engine()
 
@@ -337,8 +353,9 @@ def _download_latest_sentinel_scene(
     # IMPORTANT: Do not request the entire field at native 10 m resolution.
     # Large logical/combined field geometries can produce hundreds of MB and
     # exceed Earth Engine's 48 MB getDownloadURL request limit. The CNN later
-    # resizes both inputs to 224x224, so a bounded 512x512 scene chip is
-    # sufficient for the existing model interface.
+    # resizes both inputs to 224x224, so a bounded scene chip is sufficient for
+    # the existing model interface. The chip size is controlled by
+    # LIVE_BURN_ML_CHIP_DIMENSIONS (256x256 by default).
     download_url = image.getDownloadURL(
         {
             "bands": ["B2", "B3", "B4", "B8", "B11", "B12"],
@@ -386,8 +403,9 @@ def _run_live_cnn(
             "available": False,
             "enabled": False,
             "model": "Dual RGB + SWIR ResNet18",
-            "error": "Live CNN evidence is disabled by LIVE_BURN_ML_ENABLED.",
+            "error": "Live CNN evidence is disabled for this runtime by LIVE_BURN_ML_ENABLED. On Render this defaults to disabled; locally it defaults to enabled.",
             "score_interpretation": "Only spectral evidence is enabled for this deployment.",
+            "runtime": "render" if _render_runtime else "local_or_non_render",
         }
 
     # Download first. If Earth Engine/raster rendering fails, avoid loading the
@@ -401,7 +419,7 @@ def _run_live_cnn(
 
         model = _get_live_model()
 
-        result = predict(
+        result = _load_predict_module().predict(
             model,
             rgb_path,
             swir_path,
@@ -555,6 +573,7 @@ def analyze_live_burn(field_id: str) -> dict[str, Any]:
             "geometry_mode": field_group["geometry_mode"],
             "live_cnn_enabled": LIVE_BURN_ML_ENABLED,
             "live_cnn_chip_dimensions": ML_CHIP_DIMENSIONS,
+            "runtime": "render" if _render_runtime else "local_or_non_render",
         },
         "validation_note": (
             "The spectral score is a transparent field-level burn-related signal assessment. "
