@@ -7516,3 +7516,166 @@ canvas {
     gap: 5px;
   }
 }
+
+
+/* =========================================================
+   PROJECT PARALI — FINAL MOBILE HERO ALIGNMENT PATCH
+   Keeps the full stylesheet intact while correcting the
+   field telemetry artwork on narrow screens.
+   ========================================================= */
+
+html,
+body,
+#root,
+.parali-app {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+@media (max-width: 600px) {
+  .parali-hero {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .hero-art {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: 230px;
+    padding: 0 12px 34px;
+    overflow: hidden;
+  }
+
+  /*
+     Center the telemetry card from the viewport/hero-art center
+     instead of anchoring it from the right edge. This prevents
+     rotation + fixed width from pushing the card outside phones.
+  */
+  .hero-satellite-card {
+    top: -4px;
+    left: 50%;
+    right: auto;
+    width: min(300px, calc(100% - 24px));
+    min-height: 205px;
+    padding: 18px;
+    transform: translateX(-50%) rotate(-3deg);
+    transform-origin: center center;
+  }
+
+  .hero-coordinate-chip {
+    left: 50%;
+    right: auto;
+    bottom: 8px;
+    width: max-content;
+    max-width: calc(100% - 24px);
+    transform: translateX(-50%);
+  }
+
+  .satellite-card-top {
+    min-width: 0;
+  }
+
+  .satellite-card-top span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .satellite-card-number {
+    font-size: clamp(52px, 17vw, 66px);
+  }
+
+  .satellite-card-wave {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .hero-copy {
+    max-width: calc(100% - 25px);
+  }
+
+  .hero-actions {
+    width: calc(100% - 25px);
+  }
+
+  .hero-metrics {
+    width: calc(100% - 25px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .hero-metrics strong {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 420px) {
+  .hero-art {
+    min-height: 215px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .hero-satellite-card {
+    top: -6px;
+    width: min(270px, calc(100% - 16px));
+    min-height: 195px;
+    padding: 16px;
+    transform: translateX(-50%) rotate(-2deg);
+  }
+
+  .satellite-card-number {
+    margin-top: 30px;
+    font-size: clamp(48px, 16vw, 60px);
+  }
+
+  .satellite-card-caption {
+    margin-top: 9px;
+  }
+
+  .satellite-card-wave {
+    margin-top: 17px;
+  }
+
+  .hero-coordinate-chip {
+    max-width: calc(100% - 16px);
+    bottom: 6px;
+  }
+}
+
+/* Extra narrow devices: never allow long controls/content
+   to create horizontal overflow. */
+@media (max-width: 360px) {
+  .hero-copy,
+  .hero-actions,
+  .hero-metrics {
+    margin-left: 18px;
+  }
+
+  .hero-actions,
+  .hero-metrics {
+    width: calc(100% - 18px);
+  }
+
+  .hero-primary-action,
+  .hero-secondary-action {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .hero-satellite-card {
+    width: calc(100% - 12px);
+    padding: 14px;
+  }
+}
