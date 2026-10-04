@@ -40,13 +40,22 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "http://127.0.0.1:8000";
 
-const API_TIMEOUT_MS = 15000;
+const API_TIMEOUTS = {
+  default: 30000,
+  fields: 60000,
+  fieldAnalysis: 120000,
+  harvestPrediction: 120000
+};
 
-async function fetchWithTimeout(url, options = {}) {
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeoutMs = API_TIMEOUTS.default
+) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(
     () => controller.abort(),
-    API_TIMEOUT_MS
+    timeoutMs
   );
 
   try {
@@ -59,7 +68,7 @@ async function fetchWithTimeout(url, options = {}) {
   } catch (error) {
     if (error?.name === "AbortError") {
       throw new Error(
-        `Request timed out after ${API_TIMEOUT_MS / 1000}s. Check that the Project Parali API is running at ${API_URL}.`
+        `Request timed out after ${timeoutMs / 1000}s. Check that the Project Parali API is running at ${API_URL}.`
       );
     }
 
@@ -382,7 +391,9 @@ function App() {
 
       try {
         const response = await fetchWithTimeout(
-          `${API_URL}/fields`
+          `${API_URL}/fields`,
+          {},
+          API_TIMEOUTS.fields
         );
 
         const data = await response.json();
@@ -433,7 +444,9 @@ function App() {
       const response = await fetchWithTimeout(
         `${API_URL}/live-harvest-prediction/${encodeURIComponent(
           normalizedFieldId
-        )}`
+        )}`,
+        {},
+        API_TIMEOUTS.harvestPrediction
       );
 
       const data = await response.json();
@@ -489,7 +502,9 @@ function App() {
         );
 
       const response = await fetchWithTimeout(
-        `${API_URL}/field-analysis/${encodedFieldId}`
+        `${API_URL}/field-analysis/${encodedFieldId}`,
+        {},
+        API_TIMEOUTS.fieldAnalysis
       );
 
       const data = await response.json();
