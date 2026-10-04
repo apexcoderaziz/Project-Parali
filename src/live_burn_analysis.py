@@ -76,10 +76,16 @@ COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 LOOKBACK_DAYS = 120
 MAX_CLOUD_PERCENT = 40
 REDUCE_SCALE = 10
-ML_REQUEST_TIMEOUT_SECONDS = 60
-# Keep the live CNN Earth Engine request bounded. A full-resolution polygon
-# download can exceed Earth Engine's 48 MB download-request limit.
-ML_CHIP_DIMENSIONS = "512x512"
+# Live CNN input is intentionally bounded so the Render free instance and
+# Earth Engine do not spend excessive time moving large raster payloads.
+ML_REQUEST_TIMEOUT_SECONDS = 25
+ML_CHIP_DIMENSIONS = os.getenv("LIVE_BURN_ML_CHIP_DIMENSIONS", "256x256").strip()
+LIVE_BURN_ML_ENABLED = os.getenv("LIVE_BURN_ML_ENABLED", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 
 _MODEL_LOCK = threading.Lock()
 _LIVE_MODEL = None
@@ -272,8 +278,12 @@ def _render_rgb_and_swir(dataset: "rasterio.DatasetReader") -> tuple["Image.Imag
     return Image.fromarray(rgb, mode="RGB"), Image.fromarray(swir, mode="RGB")
 
 
-def _download_latest_sentinel_scene(field_id: str, destination: str) -> dict[str, Any]:
-    """Download the latest usable Sentinel-2 six-band scene for live CNN input."""
+def _download_latest_sentinel_scene(
+    field_id: str,
+    destination: str,
+    target_scene_date: str | None = None,
+) -> tuple[dict[str, Any], str, str]:
+    """Download a small, bounded Sentinel-2 scene for live CNN input."""
 
     if requests is None or rasterio is None or MemoryFile is None or Image is None:
         raise RuntimeError(
@@ -289,24 +299,36 @@ def _download_latest_sentinel_scene(field_id: str, destination: str) -> dict[str
         raise ValueError(f"Field '{field_id}' has no usable geometry")
 
     region = ee.Geometry(geometry)
-    today = date.today()
-    start = today - timedelta(days=LOOKBACK_DAYS)
-    end = today + timedelta(days=1)
+
+    # The shared satellite service already discovered the latest usable scene
+    # while producing the canonical time series. Reuse that date when possible
+    # so the live CNN path does not repeat the full 120-day scene search.
+    if target_scene_date:
+        scene_start = date.fromisoformat(str(target_scene_date))
+        scene_end = scene_start + timedelta(days=1)
+    else:
+        today = date.today()
+        scene_start = today - timedelta(days=LOOKBACK_DAYS)
+        scene_end = today + timedelta(days=1)
 
     collection = (
         ee.ImageCollection(COLLECTION)
         .filterBounds(region)
-        .filterDate(start.isoformat(), end.isoformat())
+        .filterDate(scene_start.isoformat(), scene_end.isoformat())
         .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", MAX_CLOUD_PERCENT))
         .filter(ee.Filter.notNull(["system:time_start"]))
         .sort("system:time_start", False)
     )
 
-    count = int(collection.size().getInfo())
-    if count <= 0:
-        raise RuntimeError("No usable Sentinel-2 scenes were found for this field")
+    first = collection.first()
+    first_info = first.getInfo()
+    if not first_info:
+        raise RuntimeError(
+            f"No usable Sentinel-2 scene was found for field '{field_id}' "
+            f"around {scene_start.isoformat()}."
+        )
 
-    image = ee.Image(collection.first())
+    image = ee.Image(first)
     time_start = image.get("system:time_start")
     scene_date = ee.Date(time_start).format("YYYY-MM-dd").getInfo()
     scene_id = image.get("PRODUCT_ID").getInfo()
@@ -353,16 +375,31 @@ def _download_latest_sentinel_scene(field_id: str, destination: str) -> dict[str
     }, rgb_path, swir_path
 
 
-def _run_live_cnn(field_id: str) -> dict[str, Any]:
-    """Run the existing Dual RGB + SWIR CNN on live Sentinel-2 rendered inputs."""
+def _run_live_cnn(
+    field_id: str,
+    latest_scene_date: str | None = None,
+) -> dict[str, Any]:
+    """Run the existing Dual RGB + SWIR CNN on bounded live Sentinel-2 input."""
 
-    model = _get_live_model()
+    if not LIVE_BURN_ML_ENABLED:
+        return {
+            "available": False,
+            "enabled": False,
+            "model": "Dual RGB + SWIR ResNet18",
+            "error": "Live CNN evidence is disabled by LIVE_BURN_ML_ENABLED.",
+            "score_interpretation": "Only spectral evidence is enabled for this deployment.",
+        }
 
+    # Download first. If Earth Engine/raster rendering fails, avoid loading the
+    # PyTorch model unnecessarily on a constrained Render instance.
     with TemporaryDirectory(prefix="parali_live_burn_") as temp_dir:
         scene, rgb_path, swir_path = _download_latest_sentinel_scene(
             field_id,
             temp_dir,
+            target_scene_date=latest_scene_date,
         )
+
+        model = _get_live_model()
 
         result = predict(
             model,
@@ -403,23 +440,86 @@ def analyze_live_burn(field_id: str) -> dict[str, Any]:
     if not normalized_id:
         raise ValueError("field_id cannot be empty")
 
-    series = _fetch_current_series(normalized_id)
+    try:
+        series = _fetch_current_series(normalized_id)
+    except Exception as exc:
+        # Return a structured result instead of letting the browser surface a
+        # generic "Failed to fetch" when Earth Engine is temporarily slow or
+        # unavailable. This keeps the endpoint observable and debuggable.
+        field_group = resolve_field_context(normalized_id, str(GEOJSON_PATH))
+        return {
+            "success": True,
+            "field_id": normalized_id,
+            "source_field_ids": field_group["source_field_ids"],
+            "source_field_count": field_group["source_field_count"],
+            "geometry_mode": field_group["geometry_mode"],
+            "analysis_type": "live Sentinel-2 spectral + Dual CNN burn assessment",
+            "burn_likelihood": "unavailable",
+            "signal_strength": None,
+            "status": "data_unavailable",
+            "status_label": "Live Sentinel-2 burn analysis temporarily unavailable",
+            "as_of_date": None,
+            "confidence": None,
+            "signals": {},
+            "reasons": [
+                "The live Sentinel-2 acquisition could not be completed for this request."
+            ],
+            "latest_observation": None,
+            "observations": 0,
+            "time_series": [],
+            "ml_model": {
+                "available": False,
+                "model": "Dual RGB + SWIR ResNet18",
+                "error": "Skipped because live Sentinel-2 observations were unavailable.",
+                "score_interpretation": "Live ML evidence requires a usable Sentinel-2 scene.",
+            },
+            "data_source": {
+                "current": COLLECTION,
+                "lookback_days": LOOKBACK_DAYS,
+                "max_cloud_percent": MAX_CLOUD_PERCENT,
+                "scale_meters": REDUCE_SCALE,
+                "bands": ["B4", "B8", "B11", "B12"],
+                "indices": ["NDVI", "NBR", "NBR2", "SWIR2_NIR_RATIO"],
+                "source_field_ids": field_group["source_field_ids"],
+                "geometry_mode": field_group["geometry_mode"],
+            },
+            "error_detail": str(exc),
+            "validation_note": (
+                "No burn score was fabricated. The field could not be assessed "
+                "because live Sentinel-2 acquisition was unavailable."
+            ),
+            "limitations": [
+                "Live Earth Engine acquisition failed for this request.",
+            ],
+        }
+
     signals = _score_burn_signals(series)
     latest = series[-1] if series else None
     field_group = resolve_field_context(normalized_id, str(GEOJSON_PATH))
 
     ml_result: dict[str, Any]
-    try:
-        ml_result = _run_live_cnn(normalized_id)
-    except Exception as exc:
-        # Keep spectral intelligence available even when the optional CNN
-        # bridge cannot download/render a live scene.
+    if not series:
         ml_result = {
             "available": False,
             "model": "Dual RGB + SWIR ResNet18",
-            "error": str(exc),
-            "score_interpretation": "Live ML evidence unavailable for this request.",
+            "error": "Skipped because no usable Sentinel-2 observations were returned.",
+            "score_interpretation": "Live ML evidence requires a usable Sentinel-2 scene.",
         }
+    else:
+        try:
+            ml_result = _run_live_cnn(
+                normalized_id,
+                latest_scene_date=latest.get("date") if latest else None,
+            )
+        except Exception as exc:
+            # Keep spectral intelligence available even when the optional CNN
+            # bridge cannot download/render a live scene.
+            ml_result = {
+                "available": False,
+                "model": "Dual RGB + SWIR ResNet18",
+                "error": str(exc),
+                "score_interpretation": "Live ML evidence unavailable for this request.",
+            }
 
     return {
         "success": True,
@@ -453,6 +553,8 @@ def analyze_live_burn(field_id: str) -> dict[str, Any]:
             "indices": ["NDVI", "NBR", "NBR2", "SWIR2_NIR_RATIO"],
             "source_field_ids": field_group["source_field_ids"],
             "geometry_mode": field_group["geometry_mode"],
+            "live_cnn_enabled": LIVE_BURN_ML_ENABLED,
+            "live_cnn_chip_dimensions": ML_CHIP_DIMENSIONS,
         },
         "validation_note": (
             "The spectral score is a transparent field-level burn-related signal assessment. "
