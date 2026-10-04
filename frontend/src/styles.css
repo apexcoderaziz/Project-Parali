@@ -7679,3 +7679,397 @@ canvas {
     padding: 14px;
   }
 }
+
+
+/* =========================================================
+   PROJECT PARALI — FINAL MOBILE HERO + HEADER FIX
+   This override intentionally sits at the end of the master
+   stylesheet so it wins over earlier responsive rules.
+   ========================================================= */
+
+/* Keep the entire app inside the viewport without changing
+   existing desktop/tablet layouts. */
+html,
+body,
+#root,
+.parali-app {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+@media (max-width: 640px) {
+  /* ---------------------------------------------------------
+     MOBILE HEADER
+     --------------------------------------------------------- */
+  .parali-header {
+    width: 100%;
+    min-width: 0;
+    min-height: 64px;
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .parali-brand {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .parali-brand-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+  }
+
+  .parali-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  .theme-toggle {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50%;
+    flex: 0 0 36px;
+  }
+
+  /*
+     On phones the API status becomes a compact live indicator.
+     The larger dot + halo makes it clearly visible against the
+     dark header while keeping the control compact.
+  */
+  .parali-live-status {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    border-radius: 50%;
+    font-size: 0 !important;
+    line-height: 1;
+    overflow: visible;
+    position: relative;
+    flex: 0 0 36px;
+  }
+
+  .parali-live-status .live-dot {
+    display: block !important;
+    width: 9px !important;
+    height: 9px !important;
+    min-width: 9px !important;
+    min-height: 9px !important;
+    margin: 0 !important;
+    flex: 0 0 9px;
+    border-radius: 999px;
+    background: #7dffad !important;
+    box-shadow:
+      0 0 0 4px rgba(125, 255, 173, 0.12),
+      0 0 16px rgba(125, 255, 173, 0.52);
+  }
+
+  /* ---------------------------------------------------------
+     MOBILE HERO LAYOUT
+     The text and artwork become independent rows. The artwork
+     receives enough vertical space for the complete telemetry
+     card so the card cannot be clipped by its own row.
+     --------------------------------------------------------- */
+  .parali-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 285px;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .hero-content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    align-self: start;
+    padding:
+      58px
+      clamp(20px, 6vw, 28px)
+      28px;
+  }
+
+  .hero-title-wrap {
+    min-width: 0;
+  }
+
+  .parali-hero h1 {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+
+  .hero-copy {
+    width: calc(100% - 22px);
+    max-width: calc(100% - 22px);
+    min-width: 0;
+    margin-left: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  .hero-actions {
+    width: calc(100% - 22px);
+    max-width: calc(100% - 22px);
+    margin-left: 22px;
+  }
+
+  .hero-primary-action,
+  .hero-secondary-action {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .hero-metrics {
+    width: calc(100% - 22px);
+    max-width: calc(100% - 22px);
+    margin-left: 22px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-width: 0;
+  }
+
+  .hero-metrics > div {
+    min-width: 0;
+  }
+
+  /* ---------------------------------------------------------
+     FIELD TELEMETRY CARD
+     Center from the actual artwork container rather than the
+     right edge. No negative positioning is used.
+     --------------------------------------------------------- */
+  .hero-art {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: 285px;
+    min-height: 285px;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .hero-orbit-one {
+    width: 360px;
+    height: 360px;
+    left: 50%;
+    right: auto;
+    top: -70px;
+    transform: translateX(-50%) rotate(-19deg);
+  }
+
+  .hero-orbit-two {
+    width: 460px;
+    height: 210px;
+    left: 50%;
+    right: auto;
+    top: 18px;
+    transform: translateX(-50%) rotate(-19deg);
+  }
+
+  .hero-orbit-three {
+    width: 240px;
+    height: 240px;
+    left: 50%;
+    right: auto;
+    top: 20px;
+    transform: translateX(-50%) rotate(-19deg);
+  }
+
+  .hero-satellite-card {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    right: auto;
+
+    width: min(310px, calc(100% - 24px));
+    max-width: calc(100% - 24px);
+    min-width: 0;
+    min-height: 214px;
+    height: auto;
+
+    padding: 18px;
+    box-sizing: border-box;
+
+    transform: translateX(-50%) rotate(-2deg);
+    transform-origin: center center;
+
+    z-index: 5;
+  }
+
+  .satellite-card-top {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .satellite-card-top span {
+    min-width: 0;
+    max-width: calc(100% - 26px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .satellite-card-number {
+    margin-top: 34px;
+    font-size: clamp(50px, 16vw, 66px);
+    line-height: 0.9;
+  }
+
+  .satellite-card-caption {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .satellite-card-wave {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .hero-coordinate-chip {
+    position: absolute;
+    left: 50%;
+    right: auto;
+    bottom: 10px;
+
+    width: max-content;
+    max-width: calc(100% - 24px);
+    min-width: 0;
+
+    transform: translateX(-50%);
+    z-index: 6;
+
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* =========================================================
+   SMALL PHONE REFINEMENT
+   ========================================================= */
+@media (max-width: 420px) {
+  .parali-header {
+    min-height: 60px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .parali-logo {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .parali-brand-name {
+    font-size: 9px;
+    letter-spacing: 0.13em;
+  }
+
+  .parali-header-actions {
+    gap: 5px;
+  }
+
+  .theme-toggle,
+  .parali-live-status {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    flex-basis: 34px;
+  }
+
+  .parali-live-status .live-dot {
+    width: 9px !important;
+    height: 9px !important;
+    min-width: 9px !important;
+    min-height: 9px !important;
+  }
+
+  .parali-hero {
+    grid-template-rows: auto 275px;
+  }
+
+  .hero-art {
+    height: 275px;
+    min-height: 275px;
+  }
+
+  .hero-satellite-card {
+    top: 10px;
+    width: min(294px, calc(100% - 20px));
+    max-width: calc(100% - 20px);
+    min-height: 210px;
+    padding: 17px;
+    transform: translateX(-50%) rotate(-1.5deg);
+  }
+
+  .satellite-card-number {
+    margin-top: 31px;
+    font-size: clamp(48px, 15.5vw, 62px);
+  }
+
+  .hero-coordinate-chip {
+    bottom: 8px;
+    max-width: calc(100% - 20px);
+  }
+}
+
+/* =========================================================
+   EXTRA NARROW PHONES
+   ========================================================= */
+@media (max-width: 360px) {
+  .hero-content {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .hero-copy,
+  .hero-actions,
+  .hero-metrics {
+    margin-left: 18px;
+    width: calc(100% - 18px);
+    max-width: calc(100% - 18px);
+  }
+
+  .parali-hero h1 {
+    font-size: clamp(36px, 13vw, 50px);
+  }
+
+  .hero-satellite-card {
+    width: calc(100% - 16px);
+    max-width: calc(100% - 16px);
+    min-height: 204px;
+    padding: 15px;
+  }
+
+  .satellite-card-number {
+    margin-top: 29px;
+    font-size: clamp(46px, 15vw, 58px);
+  }
+
+  .hero-coordinate-chip {
+    max-width: calc(100% - 16px);
+  }
+}
