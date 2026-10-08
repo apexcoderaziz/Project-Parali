@@ -51,18 +51,19 @@ COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 LOOKBACK_DAYS = 120
 MAX_CLOUD_PERCENT = 40
 REDUCE_SCALE = 10
-# Live CNN input is intentionally bounded so the Render free instance and
-# Earth Engine do not spend excessive time moving large raster payloads.
+# Live CNN input is intentionally bounded so AWS/local runtimes and Earth
+# Engine do not spend excessive time moving large raster payloads.
 ML_REQUEST_TIMEOUT_SECONDS = 25
 ML_CHIP_DIMENSIONS = os.getenv("LIVE_BURN_ML_CHIP_DIMENSIONS", "256x256").strip()
 
-# Render exposes RENDER=true at runtime. The explicit environment variable can
-# still override the default so the same source tree can run the full live CNN
-# locally while keeping the constrained Render deployment spectral-only.
-_render_runtime = os.getenv("RENDER", "").strip().lower() == "true"
+# AWS is expected to have enough memory for the existing Dual RGB + SWIR
+# ResNet18, so live CNN evidence is enabled by default. The environment
+# variable remains available as an explicit kill switch for troubleshooting or
+# for any constrained deployment. No Render-specific runtime detection is
+# used here, which means the same file can run locally and on AWS.
 _live_burn_ml_override = os.getenv("LIVE_BURN_ML_ENABLED")
 if _live_burn_ml_override is None:
-    LIVE_BURN_ML_ENABLED = not _render_runtime
+    LIVE_BURN_ML_ENABLED = True
 else:
     LIVE_BURN_ML_ENABLED = _live_burn_ml_override.strip().lower() not in {
         "0",
@@ -70,6 +71,10 @@ else:
         "no",
         "off",
     }
+
+# Optional runtime label used only for diagnostics in the API response.
+# Examples: AWS, EC2, local, staging. It does not change model behavior.
+PARALI_RUNTIME = os.getenv("PARALI_RUNTIME", "aws_or_local").strip() or "aws_or_local"
 
 _MODEL_LOCK = threading.Lock()
 _LIVE_MODEL = None
@@ -403,9 +408,9 @@ def _run_live_cnn(
             "available": False,
             "enabled": False,
             "model": "Dual RGB + SWIR ResNet18",
-            "error": "Live CNN evidence is disabled for this runtime by LIVE_BURN_ML_ENABLED. On Render this defaults to disabled; locally it defaults to enabled.",
+            "error": "Live CNN evidence is disabled by the LIVE_BURN_ML_ENABLED environment variable.",
             "score_interpretation": "Only spectral evidence is enabled for this deployment.",
-            "runtime": "render" if _render_runtime else "local_or_non_render",
+            "runtime": PARALI_RUNTIME,
         }
 
     # Download first. If Earth Engine/raster rendering fails, avoid loading the
@@ -573,7 +578,7 @@ def analyze_live_burn(field_id: str) -> dict[str, Any]:
             "geometry_mode": field_group["geometry_mode"],
             "live_cnn_enabled": LIVE_BURN_ML_ENABLED,
             "live_cnn_chip_dimensions": ML_CHIP_DIMENSIONS,
-            "runtime": "render" if _render_runtime else "local_or_non_render",
+            "runtime": PARALI_RUNTIME,
         },
         "validation_note": (
             "The spectral score is a transparent field-level burn-related signal assessment. "
