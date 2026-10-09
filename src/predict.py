@@ -239,7 +239,8 @@ def load_model():
 
     checkpoint = torch.load(
         MODEL_PATH,
-        map_location=DEVICE
+        map_location=DEVICE,
+        weights_only=False
     )
 
 
