@@ -49,9 +49,7 @@ except ImportError:
     from residue_estimation import estimate_residue
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+
 
 BASE_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..")
@@ -68,9 +66,7 @@ DEFAULT_CLUSTER_RADIUS_KM = 5.0
 DEFAULT_TRUCK_CAPACITY_TONNES = 10.0
 
 
-# ============================================================
-# BASIC HELPERS
-# ============================================================
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     try:
