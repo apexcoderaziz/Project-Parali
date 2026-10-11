@@ -11,9 +11,7 @@ ee.Initialize(project=PROJECT_ID)
 print("Earth Engine initialized successfully!")
 
 
-# --------------------------------------------------
-# 2. Define Sangrur approximate study area
-# --------------------------------------------------
+
 
 sangrur = ee.Geometry.Rectangle([
     75.40, 29.70,   # min longitude, min latitude
@@ -23,9 +21,7 @@ sangrur = ee.Geometry.Rectangle([
 print("Sangrur study area created.")
 
 
-# --------------------------------------------------
-# 3. Load Sentinel-2
-# --------------------------------------------------
+
 
 collection = (
     ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")

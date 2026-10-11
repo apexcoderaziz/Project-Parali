@@ -13,9 +13,8 @@ ee.Initialize(project=PROJECT_ID)
 
 print("Earth Engine initialized successfully!")
 
-
 # --------------------------------------------------
-# 2. Load labeled Sangrur fields
+# 2. Load Sangrur field data
 # --------------------------------------------------
 
 input_file = Path("data/processed/sangrur_fields.geojson")
@@ -37,7 +36,7 @@ print("Earth Engine field collection created.")
 
 
 # --------------------------------------------------
-# 4. Define study area
+# 4.lets  Define study area
 # --------------------------------------------------
 
 sangrur = ee.Geometry.Rectangle([
