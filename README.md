@@ -517,10 +517,6 @@ git push -u origin feature/your-feature
 
 ---
 
-## 📄 License
-
-Add the project's chosen license before distributing or publishing the repository. No license should be assumed until the repository owner selects one.
-
 ---
 
 **Project Parali — From Satellite Intelligence to Biomass Opportunity.**
