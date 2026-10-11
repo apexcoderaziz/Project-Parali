@@ -1,1546 +1,280 @@
 # 🌾 Project Parali
 
-## Satellite AI for Crop-Residue Detection, Crop-Transition Intelligence & Biomass Recovery
+### Satellite AI for Crop-Residue Detection, Crop-Transition Intelligence & Biomass Recovery
 
-<p align="center">
+**Transforming satellite observations into actionable agricultural intelligence.**
+
+Project Parali is an AI-powered geospatial intelligence platform designed to connect satellite-based crop monitoring with agricultural residue recovery and biomass logistics. By combining Sentinel-2 satellite imagery, Google Earth Engine, machine learning, geospatial analytics, and economic estimation, the platform helps identify crop-transition signals, assess burn-related evidence, estimate recoverable biomass, discover nearby biomass facilities, and evaluate potential collection opportunities.
 
 **Satellite Intelligence → Field Intelligence → Biomass Intelligence → Operational Planning**
 
-</p>
+---
 
-> Project Parali is an AI-powered geospatial intelligence platform that uses satellite observations, machine learning, field-level analytics and biomass operations logic to identify crop-transition and burn-related signals, estimate recoverable agricultural residue, match supply with biomass facilities, organize nearby fields into collection clusters, estimate transport cost, and calculate an **estimated net profit** under configurable economic assumptions.
+## 🚀 Project Overview
+
+Agricultural residue management is not only an environmental challenge but also a problem of timing, visibility, resource recovery, and logistics.
+
+Project Parali aims to bridge the gap between satellite observations and real-world biomass operations through a unified, field-centric intelligence platform.
+
+### Key Objectives
+
+- Monitor agricultural fields using satellite observations.
+- Identify potential crop-transition and harvest-window signals.
+- Analyze burn-related spectral patterns and independent ML evidence.
+- Estimate agricultural residue and recoverable biomass.
+- Match potential biomass supply with nearby processing facilities.
+- Group nearby fields into collection clusters.
+- Estimate transportation distance and logistics costs.
+- Calculate estimated revenue and net profit under configurable assumptions.
+- Present field-level insights through an interactive geospatial dashboard.
 
 ---
 
-## 📖 What is Project Parali?
+## ✨ Core Features
 
-Agricultural residue is not simply a waste problem. It is also a **timing, visibility, collection and logistics problem**.
-
-A biomass facility may want to purchase agricultural residue, while the difficult questions happen earlier:
-
-- Which fields are approaching or have passed a crop-transition event?
-- Which fields show burn-related signals?
-- How much residue may be recoverable?
-- Which fields are geographically close enough to collect together?
-- Which biomass facility can potentially receive the material?
-- What transport distance and cost should be expected?
-- After transport, is the biomass opportunity still economically meaningful?
-
-Project Parali is designed to connect these pieces into one field-centric system.
-
-```text
-                 ┌──────────────────────┐
-                 │  Satellite / GIS Data │
-                 └──────────┬───────────┘
-                            ↓
-                 ┌──────────────────────┐
-                 │    Field Context     │
-                 └──────────┬───────────┘
-                            ↓
-                 ┌──────────────────────┐
-                 │ Sentinel-2 Signals   │
-                 │ NDVI / NBR / SWIR    │
-                 └──────────┬───────────┘
-                            ↓
-            ┌───────────────┴────────────────┐
-            ↓                                ↓
- ┌─────────────────────┐          ┌─────────────────────┐
- │ Crop Transition     │          │ Burn Intelligence   │
- │ / Harvest Signals   │          │ Spectral + ML       │
- └──────────┬──────────┘          └──────────┬──────────┘
-            └───────────────┬────────────────┘
-                            ↓
-                 ┌──────────────────────┐
-                 │ Residue Estimation   │
-                 └──────────┬───────────┘
-                            ↓
-                 ┌──────────────────────┐
-                 │ Biomass Opportunity │
-                 └──────────┬───────────┘
-                            ↓
-              ┌─────────────┴─────────────┐
-              ↓                           ↓
-   ┌────────────────────┐       ┌────────────────────┐
-   │ Facility Matching  │       │ Collection Clusters│
-   └─────────┬──────────┘       └─────────┬──────────┘
-             └─────────────┬──────────────┘
-                           ↓
-                 ┌──────────────────────┐
-                 │ Logistics Estimation │
-                 └──────────┬───────────┘
-                            ↓
-                 ┌──────────────────────┐
-                 │ Estimated Net Profit │
-                 └──────────┬───────────┘
-                            ↓
-                 ┌──────────────────────┐
-                 │ Decision Dashboard   │
-                 └──────────────────────┘
-```
-
+| Feature | Description |
+|---|---|
+| 🛰️ Satellite Intelligence | Processes Sentinel-2 observations using Google Earth Engine. |
+| 🌱 Crop-Transition Analysis | Evaluates vegetation trends to identify candidate transition windows. |
+| 🔥 Burn Intelligence | Combines transparent spectral analysis with independent CNN evidence. |
+| 🌾 Biomass Estimation | Estimates gross residue and recoverable biomass. |
+| 🏭 Facility Matching | Identifies potential biomass facilities within a configured search radius. |
+| 🗺️ Interactive Field Mapping | Displays field boundaries and supports field-level exploration. |
+| 🔗 Field Context Resolution | Preserves logical field identities, source records, geometry, and metadata. |
+| 📍 Collection Clustering | Groups nearby fields to support collection planning. |
+| 🚚 Logistics Estimation | Estimates road distance and transportation costs. |
+| 💰 Economic Analysis | Estimates biomass revenue, transport expenses, and net profit. |
+| 📊 Intelligence Dashboard | Presents field conditions, satellite timelines, and operational insights. |
+| 🤖 Deep Learning | Uses a Dual RGB + SWIR ResNet18 model for image-based burn classification. |
 
 ---
 
-# 🎯 Problem Statement
+## 🛠️ Technology Stack
 
-Crop residue generated after harvesting can be difficult to manage within a short operational window. Where residue is burned, the result can include air-pollution impacts, biomass loss and inefficient use of agricultural resources.
+### Frontend
+- React.js
+- Vite
+- Leaflet / React-Leaflet
+- Recharts
+- CSS
 
-The core problem Project Parali addresses is:
+### Backend
+- Python
+- FastAPI
+- REST APIs
 
-> **How can satellite intelligence be converted into field-level, operationally useful biomass intelligence before residue is lost or burned?**
+### Satellite & Geospatial Processing
+- Google Earth Engine
+- Sentinel-2 Surface Reflectance Harmonized
+- GeoJSON
+- NDVI, NBR, NBR2, and SWIR-derived indicators
 
-The project therefore focuses on the complete information chain:
+### Machine Learning
+- PyTorch
+- ResNet18
+- Dual RGB + SWIR architecture
+- Random Forest
+- Support Vector Machine (SVM)
+- Scikit-learn
 
-```text
-WHEN is the field transitioning?
-          ↓
-WHAT signals are visible?
-          ↓
-HOW MUCH biomass may be recoverable?
-          ↓
-WHERE can it go?
-          ↓
-HOW can nearby fields be collected efficiently?
-          ↓
-WHAT transport cost is expected?
-          ↓
-WHAT is the estimated economic opportunity?
-```
-
----
-
-# 🚀 Project Vision
-
-Project Parali aims to evolve from a satellite-monitoring application into a **field-to-facility agricultural biomass intelligence platform**.
-
-### Field Intelligence
-
-```text
-Field
- ├── Geometry
- ├── Area
- ├── Source-year records
- ├── Current satellite observation
- ├── NDVI
- ├── NBR
- ├── Vegetation / burn signals
- ├── Crop-transition assessment
- └── Satellite time series
-```
-
-### Biomass Intelligence
-
-```text
-Field Intelligence
-      ↓
-Residue Estimate
-      ↓
-Recoverable Biomass
-      ↓
-Facility Opportunity
-      ↓
-Collection Cluster
-```
-
-### Operational Intelligence
-
-```text
-Collection Cluster
-      ↓
-Facility Assignment
-      ↓
-Transport Distance
-      ↓
-Transport Cost
-      ↓
-Estimated Gross Revenue
-      ↓
-Estimated Net Profit
-```
+### Data & Infrastructure
+- CSV-based processed datasets
+- Geospatial field records
+- Git and Git LFS for version control and large model artifacts
 
 ---
 
-# 🧠 Design Philosophy
+## 🏗️ System Architecture
 
-Project Parali follows five architectural principles.
-
-### 1. One field context, many services
-
-Every downstream intelligence service should consume the same resolved field context.
-
-```text
-              FIELD CONTEXT
-                    │
-       ┌────────────┼─────────────┐
-       ↓            ↓             ↓
-   Satellite      Harvest        Biomass
-       │            │             │
-       └────────────┼─────────────┘
-                    ↓
-                Logistics
-```
-
-This prevents different modules from independently interpreting the same field ID in different ways.
-
-### 2. Preserve source provenance
-
-A logical field may represent multiple historical source records.
-
-Example:
-
-```text
-Logical Field 34
- ├── 2020_34
- └── 2021_34
-```
-
-The system preserves those source IDs instead of flattening them away.
-
-### 3. Separate evidence from conclusions
-
-Satellite indicators are evidence.
-
-A decreasing NDVI value is a signal. It is not automatically proof of harvest.
-
-Similarly, a burn-related spectral change is a signal and should be interpreted with contextual evidence.
-
-### 4. Separate current intelligence from trained-model evaluation
-
-The existing image-based CNN has its own training/evaluation dataset.
-
-Live Sentinel-2 analytics are a different domain.
-
-The system therefore avoids presenting the existing CNN's benchmark metrics as if they were Sentinel-2 field-model accuracy.
-
-### 5. Keep economic outputs assumption-aware
-
-Biomass quantity, sale price and transport cost are estimates under configurable assumptions.
-
-The application labels the output as:
-
-```text
-Estimated Net Profit
-```
-
-rather than representing it as confirmed realized profit.
-
----
-
-# 🏗️ Complete System Architecture
-
-## 1. High-Level Architecture
+The platform follows a modular architecture in which the frontend communicates with a FastAPI backend. The backend coordinates field-context resolution, satellite processing, crop-transition analysis, burn intelligence, biomass estimation, facility matching, clustering, logistics, and economic calculations.
 
 ```mermaid
 flowchart TB
+    USER[User] --> FRONTEND[React Frontend]
 
-    USER[User]
-
-    subgraph FRONTEND[React Frontend]
+    subgraph UI[Presentation Layer]
         MAP[Interactive Field Map]
-        DASH[Field Intelligence Dashboard]
-        DRAWER[Field Drawer]
-        CHARTS[Satellite Timeline / Charts]
+        DASH[Intelligence Dashboard]
+        DRAWER[Field Intelligence Drawer]
+        CHARTS[Satellite Timeline and Charts]
     end
 
-    subgraph API[FastAPI Application]
-        ROUTER[API Layer]
+    FRONTEND --> UI
+
+    subgraph BACKEND[FastAPI Backend]
+        API[API Layer]
         CONTEXT[Field Context Service]
-        SAT[Shared Sentinel-2 Service]
-        HARVEST[Crop Transition Engine]
-        BURN[Live Burn Intelligence]
-        RESIDUE[Residue Estimation]
+        SAT[Satellite Intelligence]
+        HARVEST[Crop-Transition Engine]
+        BURN[Burn Intelligence]
+        BIOMASS[Residue Estimation]
         OPPORTUNITY[Biomass Opportunity]
-        CLUSTER[Biomass Clustering]
+        CLUSTER[Collection Clustering]
         LOGISTICS[Logistics Estimation]
-        ECONOMICS[Economics]
+        ECONOMICS[Economic Analysis]
     end
 
-    subgraph DATA[Data & ML]
-        GEOJSON[Field GeoJSON]
-        CSV[Processed Time Series / Historical Data]
-        MODEL[Dual RGB + SWIR CNN]
-    end
-
-    GEE[Google Earth Engine]
-    S2[Sentinel-2 SR Harmonized]
-    FACILITIES[Biomass Facility Registry]
-
-    USER --> FRONTEND
-
-    FRONTEND --> MAP
-    FRONTEND --> DASH
-    FRONTEND --> DRAWER
-    FRONTEND --> CHARTS
-
-    MAP --> ROUTER
-    DASH --> ROUTER
-    DRAWER --> ROUTER
-    CHARTS --> ROUTER
-
-    ROUTER --> CONTEXT
-
+    UI --> API
+    API --> CONTEXT
     CONTEXT --> SAT
     CONTEXT --> HARVEST
     CONTEXT --> BURN
-    CONTEXT --> RESIDUE
-    CONTEXT --> OPPORTUNITY
-    CONTEXT --> CLUSTER
-    CONTEXT --> LOGISTICS
-
-    SAT --> GEE
-    GEE --> S2
-
-    BURN --> MODEL
-
-    RESIDUE --> OPPORTUNITY
-    OPPORTUNITY --> FACILITIES
+    CONTEXT --> BIOMASS
+    BIOMASS --> OPPORTUNITY
+    OPPORTUNITY --> CLUSTER
     CLUSTER --> LOGISTICS
     OPPORTUNITY --> LOGISTICS
     LOGISTICS --> ECONOMICS
 
-    GEOJSON --> CONTEXT
-    CSV --> HARVEST
-
-    HARVEST --> DRAWER
-    BURN --> DRAWER
-    RESIDUE --> DRAWER
-    OPPORTUNITY --> DRAWER
-    CLUSTER --> DRAWER
-    LOGISTICS --> DRAWER
-    ECONOMICS --> DRAWER
+    SAT --> GEE[Google Earth Engine]
+    GEE --> S2[Sentinel-2 Data]
+    BURN --> MODEL[Dual RGB + SWIR CNN]
 ```
 
 ---
 
-# 🔄 2. End-to-End System Flow
+## 🛰️ Satellite Intelligence
 
-```text
-┌──────────────────────────┐
-│      User selects field  │
-└─────────────┬────────────┘
-              ↓
-┌──────────────────────────┐
-│        Field Context     │
-│  Resolve logical field   │
-│  + source records        │
-│  + geometry + metadata   │
-└─────────────┬────────────┘
-              ↓
-┌──────────────────────────┐
-│   Shared Satellite Layer │
-│ Sentinel-2 + GEE         │
-│ Cloud filtering/masking  │
-│ Spectral features        │
-└─────────────┬────────────┘
-              ↓
-       ┌──────┼───────┐
-       ↓      ↓       ↓
-    Harvest  Burn   Satellite
-    Signal   Signal  Time Series
-       │      │       │
-       └──────┼───────┘
-              ↓
-┌──────────────────────────┐
-│      Field Intelligence  │
-└─────────────┬────────────┘
-              ↓
-┌──────────────────────────┐
-│     Residue Estimation   │
-└─────────────┬────────────┘
-              ↓
-       ┌──────┴───────┐
-       ↓              ↓
- Facility Matching  Clustering
-       │              │
-       └──────┬───────┘
-              ↓
-┌──────────────────────────┐
-│   Logistics Estimation   │
-└─────────────┬────────────┘
-              ↓
-┌──────────────────────────┐
-│   Economic Calculation   │
-│ Revenue - Transport     │
-└─────────────┬────────────┘
-              ↓
-┌──────────────────────────┐
-│    React Decision UI     │
-└──────────────────────────┘
-```
+Project Parali uses Sentinel-2 Surface Reflectance Harmonized observations to derive field-level spectral indicators.
+
+| Indicator | Purpose |
+|---|---|
+| NDVI | Evaluates vegetation greenness and changes over time. |
+| NBR | Supports analysis of vegetation and burn-related spectral changes. |
+| NBR2 | Provides additional SWIR-based spectral information. |
+| SWIR/NIR | Supports assessment of changes in vegetation and surface conditions. |
+
+The satellite-processing pipeline includes:
+
+1. Resolving the selected field geometry.
+2. Retrieving relevant Sentinel-2 observations.
+3. Filtering and masking cloud-affected pixels.
+4. Scaling reflectance values.
+5. Computing spectral indicators.
+6. Aggregating measurements at field level.
+7. Building a date-based time series.
+8. Sharing observations with downstream intelligence modules.
 
 ---
 
-# 🧩 3. Field Context Architecture
+## 🤖 Machine Learning and Burn Intelligence
 
-The field context layer is the **source of truth for field identity and geometry**.
+The project includes a Dual RGB + SWIR ResNet18 model for image-based burn classification.
 
-## Multi-source logical field
-
-```text
-34
-│
-├── 2020_34
-│
-└── 2021_34
-```
-
-The context layer produces:
-
-```text
-logical_field_id
-logical_field_number
-source_field_ids
-source_field_count
-geometry_mode
-geometry
-centroid
-area
-categories
-source_fields
-source_indicators
-```
-
-### Combined geometry
-
-For a multi-source logical field:
-
-```text
-2020_34 geometry
-        +
-2021_34 geometry
-        ↓
-Combined MultiPolygon
-```
-
-### Aggregated area
-
-```text
-Area(logical field)
-    =
-Σ Area(source fields)
-```
-
-### Aggregated centroid
-
-For multiple sources, the centroid is derived using source-area weighting.
-
-```text
-Weighted Centroid
-=
-Σ(source centroid × source area)
-──────────────────────────────
-      Σ(source area)
-```
-
-### Single-source field
-
-For a field such as:
-
-```text
-343 → 2021_343
-```
-
-the original geometry is used directly.
-
----
-
-# 🛰️ 4. Shared Satellite Intelligence Layer
-
-The shared satellite service prevents every module from separately implementing Earth Engine queries.
-
-## Satellite pipeline
+The architecture processes RGB and SWIR representations through separate feature-extraction branches, combines the resulting features, and produces a two-class output.
 
 ```mermaid
 flowchart LR
+    RGB[RGB Image] --> RGBNET[ResNet18 RGB Branch]
+    SWIR[SWIR Image] --> SWIRNET[ResNet18 SWIR Branch]
 
-    FIELD[Resolved Field Geometry]
-      --> GEE[Google Earth Engine]
+    RGBNET --> RGBFEATURES[RGB Features]
+    SWIRNET --> SWIRFEATURES[SWIR Features]
 
-    GEE --> COLLECTION[Sentinel-2 SR Harmonized]
+    RGBFEATURES --> FUSION[Feature Concatenation]
+    SWIRFEATURES --> FUSION
 
-    COLLECTION --> CLOUD[Cloud Filter]
-    CLOUD --> MASK[QA60 Cloud / Cirrus Mask]
-
-    MASK --> SCALE[Reflectance Scaling]
-
-    SCALE --> INDICES[NDVI / NBR / NBR2 / SWIR-NIR]
-
-    INDICES --> REDUCE[Field-Level Reduction]
-
-    REDUCE --> DATE[Date Grouping]
-
-    DATE --> CACHE[Shared Cache]
-
-    CACHE --> SERVICES[Harvest / Burn / Dashboard]
+    FUSION --> CLASSIFIER[Fully Connected Classifier]
+    CLASSIFIER --> OUTPUT[Burn / No Burn]
 ```
 
-## Current Sentinel-2 collection
+### Separate Evidence Streams
 
-```text
-COPERNICUS/S2_SR_HARMONIZED
-```
+The live burn-intelligence workflow distinguishes between:
 
-## Current spectral bands
+- **Spectral evidence:** Field-level signals derived from Sentinel-2 observations.
+- **ML evidence:** Output from the existing image-trained Dual RGB + SWIR model when its live inference bridge is available.
 
-```text
-B4  → Red
-B8  → NIR
-B11 → SWIR
-B12 → SWIR2
-```
+These outputs are intentionally kept separate because the existing CNN was trained on a separate image dataset rather than directly on the project's Sentinel-2 field patches.
 
-Additional source bands may be retained where required by the satellite service or preprocessing workflow.
+### Model Evaluation
 
-## Derived indicators
+The original project baseline reports the following benchmark results:
 
-### NDVI
+| Model | Reported Accuracy |
+|---|---:|
+| Random Forest | Approximately 87.00% |
+| SVM | 88.01% |
+| RGB ResNet18 | 81.27% |
+| Dual RGB + SWIR CNN | 91.76% |
+| Harvest-Stage Random Forest | 82.77% |
 
-```text
-NDVI = (B8 - B4) / (B8 + B4)
-```
+The reported Dual CNN F1 score is **93.45%**.
 
-### NBR
-
-```text
-NBR = (B8 - B12) / (B8 + B12)
-```
-
-### NBR2
-
-```text
-NBR2 = (B11 - B12) / (B11 + B12)
-```
-
-### SWIR2 / NIR
-
-```text
-SWIR2 / NIR = B12 / B8
-```
+These metrics describe evaluation on the corresponding image dataset. They should not be interpreted as validated accuracy on live Sentinel-2 field observations.
 
 ---
 
-# ☁️ 5. Cloud and Observation Handling
+## 🌾 Biomass Recovery and Opportunity Analysis
 
-Satellite intelligence depends on the quality of the underlying observations.
-
-The shared service therefore uses:
-
-```text
-Image collection
-      ↓
-Cloud metadata filtering
-      ↓
-QA60 cloud/cirrus masking
-      ↓
-Band scaling
-      ↓
-Field reduction
-      ↓
-Valid observations
-```
-
-The service also groups measurements by observation date so downstream modules can consume a clean time series.
-
-A short-lived cache can reduce repeated Earth Engine requests when the same field is queried repeatedly by different UI modules.
-
----
-
-# 🌱 6. Crop-Transition / Harvest Intelligence
-
-The current harvest engine should be interpreted as **crop-transition intelligence** rather than confirmed harvest-date ground truth.
-
-## Pipeline
-
-```mermaid
-flowchart TD
-
-    FIELD[Field Context]
-      --> OBS[Sentinel-2 Observations]
-
-    OBS --> NDVI[NDVI Time Series]
-    OBS --> NBR[NBR Time Series]
-
-    NDVI --> SMOOTH[Temporal Smoothing]
-    SMOOTH --> PEAK[Find Vegetation Peak]
-
-    PEAK --> DECLINE[Search for Sustained Decline]
-
-    NBR --> SUPPORT[NBR Supporting Signal]
-    DECLINE --> SIGNAL[Transition Signal Assessment]
-
-    SUPPORT --> SIGNAL
-
-    SIGNAL --> WINDOW[Candidate Transition Window]
-
-    HISTORY[Historical Transition Context]
-      --> WINDOW
-
-    WINDOW --> API[FastAPI Response]
-```
-
-## Important interpretation
-
-The current engine detects a pattern such as:
-
-```text
-Vegetation peak
-      ↓
-Sustained decline
-      ↓
-Potential crop transition
-```
-
-It should therefore be described as:
-
-```text
-Candidate crop-transition date
-```
-
-or:
-
-```text
-Estimated transition window
-```
-
-rather than a confirmed harvest date.
-
-Actual harvest-date prediction requires validated field-level harvest-date ground truth.
-
----
-
-# 🔥 7. Live Burn Intelligence
-
-The live burn system is field-driven and does not require the user to upload images for field-level analysis.
-
-The current implementation reports **two separate evidence streams**:
-
-1. Transparent field-level Sentinel-2 spectral evidence.
-2. Independent evidence from the existing Dual RGB + SWIR ResNet18 model.
-
-The two signals are intentionally kept separate. The system does not invent an arbitrary weighted fusion between them.
-
-## Live field analysis
-
-```text
-Select Field
-     ↓
-Field Context
-     ↓
-Combined Geometry
-     ↓
-Latest usable Sentinel-2 scene
-     ├───────────────────────────────┐
-     ↓                               ↓
-Spectral Field Analysis        Live CNN Scene Chip
-     ↓                               ↓
-NDVI / NBR / SWIR trends       B2/B3/B4/B8/B11/B12
-     ↓                               ↓
-Burn-related signal            RGB + SWIR rendering
-                                     ↓
-                              Dual RGB + SWIR ResNet18
-                                     ↓
-                                Independent ML Evidence
-     └───────────────┬───────────────┘
-                     ↓
-              Live Burn Intelligence
-```
-
-### Spectral evidence
-
-The field-level spectral analysis can consider:
-
-```text
-NDVI change
-NBR change
-NBR2 change
-SWIR2 change
-SWIR2 / NIR change
-Recent vs previous observations
-Trend context
-Historical field information
-```
-
-### Live CNN evidence
-
-The existing Dual RGB + SWIR ResNet18 can also be executed against the latest usable Sentinel-2 scene.
-
-For live rendering, the system requests:
-
-```text
-B2  → Blue
-B3  → Green
-B4  → Red
-B8  → NIR
-B11 → SWIR1
-B12 → SWIR2
-```
-
-The rendered model inputs are:
-
-```text
-RGB
-→ B4 / B3 / B2
-
-SWIR false-colour representation
-→ B12 / B11 / B8
-```
-
-### Bounded Sentinel-2 scene extraction
-
-A full-resolution download of a large logical field can exceed Earth Engine's download-request limit. The live CNN path therefore uses a bounded:
-
-```text
-512 × 512
-```
-
-Sentinel-2 scene representation for model rendering.
-
-The model inference pipeline then resizes its image inputs to the model's expected input size.
-
-This bounded chip is used for the **live CNN bridge only**. The field-level spectral analysis continues to operate on the resolved field geometry.
-
-### Availability behavior
-
-The spectral analysis should remain available even when the optional live CNN rendering path cannot run.
-
-Live CNN rendering requires:
-
-```text
-requests
-rasterio
-Pillow
-```
-
-and the existing model artifact.
-
-When those dependencies or the model bridge are unavailable, the API returns the spectral intelligence and marks the ML evidence as unavailable rather than failing the entire burn-analysis response.
-
-### Interpretation
-
-The live spectral score is a transparent field-level burn-related signal assessment.
-
-The CNN result is:
-
-```text
-Independent ML evidence
-```
-
-It is **not** a calibrated Sentinel-2 probability because the existing CNN was trained on a separate RGB + SWIR image dataset.
-
----
-
-# 🤖 8. Dual RGB + SWIR CNN
-
-Project Parali also contains a trained **Dual RGB + SWIR ResNet18** image model.
-
-## Architecture
-
-```mermaid
-flowchart LR
-
-    RGB[RGB Image]
-      --> RNET[ResNet18 Backbone]
-      --> RF[RGB Features]
-
-    SWIR[SWIR Image]
-      --> SNET[ResNet18 Backbone]
-      --> SF[SWIR Features]
-
-    RF --> CAT[Feature Concatenation]
-    SF --> CAT
-
-    CAT --> FC[Fully Connected Layer]
-    FC --> CLS[2-Class Output]
-
-    CLS --> NOBURN[No Burn]
-    CLS --> BURN[Burn]
-```
-
-The model architecture follows:
-
-```text
-RGB branch    → 512 features
-SWIR branch   → 512 features
-                    ↓
-              Concatenate
-                    ↓
-                 1024
-                    ↓
-               FC 1024→128
-                    ↓
-               2 classes
-```
-
----
-
-# ⚠️ 9. ML/Data Methodology
-
-This distinction is important.
-
-The currently reported Dual CNN benchmark was trained and evaluated on:
-
-```text
-munish0838/crop-burn-detection-labeled
-```
-
-It was not trained directly on raw four-band Sentinel-2 field patches from Sangrur.
-
-The uploaded baseline README reports the following evaluation results:
-
-| Model | Accuracy | Purpose |
-|---|---:|---|
-| Random Forest | ~87.00% | Classical ML baseline |
-| SVM | 88.01% | Classical ML |
-| RGB ResNet18 | 81.27% | RGB-only deep learning |
-| **Dual RGB + SWIR CNN** | **91.76%** | Current image-based burn model |
-| Harvest Stage RF | 82.77% | Vegetation-phase classifier |
-
-The same baseline reports:
-
-```text
-Dual CNN Accuracy: 91.76%
-Dual CNN F1 Score: 93.45%
-```
-
-These values are benchmark results on the evaluated image dataset, not measured accuracy on the Sangrur Sentinel-2 field dataset. These are benchmark results on the evaluated image dataset.
-
----
-
-# 🛰️ 10. Current Live Burn vs Manual ML Detector
-
-Project Parali supports two conceptually different burn workflows.
-
-## A. Live field burn intelligence
-
-```text
-Field ID
-   ↓
-Field Context
-   ↓
-Sentinel-2
-   ├── Field-level spectral analysis
-   │       ↓
-   │   NDVI / NBR / SWIR evidence
-   │
-   └── Bounded 512×512 scene chip
-           ↓
-        RGB + SWIR render
-           ↓
-      Dual RGB + SWIR ResNet18
-           ↓
-      Independent ML evidence
-```
-
-This is the field-oriented live workflow.
-
-## B. Manual image inference
-
-```text
-RGB image
-+
-SWIR image
-   ↓
-Dual CNN
-   ↓
-No Burn / Burn
-```
-
-This remains the explicit model-inference workflow where the user supplies the RGB and SWIR inputs.
-
-Keeping the workflows separate prevents the UI from implying that the image-trained model is a natively trained Sentinel-2 four-band field model.
-
----
-
-# 🔮 11. Future Native Sentinel-2 Burn Model
-
-The next ML evolution can use spatial Sentinel-2 patches directly.
-
-```mermaid
-flowchart TB
-
-    FIELD[Field 34]
-      --> GEOM[Resolved Combined Geometry]
-
-    GEOM --> S2[Sentinel-2]
-
-    S2 --> BANDS[B4 + B8 + B11 + B12]
-
-    BANDS --> PATCH[H × W × 4 Spatial Patch]
-
-    PATCH --> CNN[4-Channel CNN]
-
-    CNN --> PRED[Burn Probability / Class]
-```
-
-This future model should be independently trained and validated using Sentinel-2-compatible labels.
-
----
-
-# 🌾 12. Residue Estimation
-
-The residue engine converts field-level parameters into an estimated recoverable biomass quantity.
+The biomass engine estimates potentially recoverable agricultural residue using field area and configurable agricultural assumptions.
 
 Conceptually:
 
 ```text
 Field Area
-      ×
+    ×
 Crop Yield Assumption
-      ×
-Residue/Product Ratio
-      =
-Gross Residue
-      ×
+    ×
+Residue-to-Product Ratio
+    =
+Estimated Gross Residue
+    ×
 Collection Efficiency
-      =
-Recoverable Biomass
+    =
+Estimated Recoverable Biomass
 ```
 
-One current configured assumption set is:
+The opportunity engine connects estimated biomass availability with potential nearby facilities.
 
-```text
-Crop: Paddy
-Yield: 4.132 t/ha
-Residue/Product Ratio: 1.10
-Collection Efficiency: 70%
-```
-
-These values are model assumptions.
-
-They should be configurable and documented rather than presented as direct satellite measurements.
+The platform also supports spatial grouping of nearby fields to help organize collection opportunities and estimate aggregated biomass quantities.
 
 ---
 
-# 🏭 13. Biomass Opportunity Engine
+## 🚚 Logistics and Economic Analysis
 
-The opportunity engine connects estimated biomass supply with potential nearby biomass facilities.
+Project Parali estimates transportation requirements and potential economic outcomes using configurable assumptions.
 
-Current facility examples used by the project include:
-
-```text
-Verbio India Pvt. Ltd. CBG Plant
-Bhutal Kalan, Sangrur
-
-Sangrur RNG Private Limited CBG Plant
-Fatehgarh Panjgraian, Dhuri
-
-Patiala RNG Private Limited CBG Plant
-Jaikhar, Patran
-```
-
-## Matching architecture
-
-```mermaid
-flowchart LR
-
-    FIELD[Logical Field]
-      --> SOURCES[Source-Year Fields]
-
-    SOURCES --> RES[Recoverable Biomass]
-
-    RES --> FAC[Facility Registry]
-
-    FIELD --> GEO[Field Centroid]
-    FAC --> FGEO[Facility Coordinates]
-
-    GEO --> DIST[Geographic Distance]
-    FGEO --> DIST
-
-    DIST --> FILTER[Search Radius Filter]
-
-    FILTER --> MATCH[Facility Opportunities]
-```
-
-The engine can retain source-year opportunity information while also providing logical-field aggregation.
-
----
-
-# 🧭 14. Biomass Clustering
-
-Individual fields are often too small to evaluate in isolation for collection planning.
-
-Project Parali therefore supports field clustering.
-
-## Concept
+### Estimated Road Distance
 
 ```text
-Many nearby fields
-        ↓
-Spatial grouping
-        ↓
-Collection cluster
-        ↓
-Aggregate biomass
-        ↓
-Truck / load estimate
-        ↓
-Operational planning
+Straight-Line Distance × Road Factor
+    =
+Estimated Road Distance
 ```
 
-The cluster service can use a configured geographic radius and connected-component style grouping.
-
-A logical multi-source field should not create artificial cross-year adjacency merely because two source records share the same logical field number.
-
----
-
-# 🚚 15. Logistics Estimation
-
-The logistics engine connects biomass quantity and facility distance.
-
-## Current conceptual formula
-
-```text
-Straight-line distance
-        ×
-Road factor
-        =
-Estimated road distance
-```
-
-Then:
-
-```text
-Recoverable biomass
-        ×
-Estimated road distance
-        ×
-Transport rate
-        =
-Estimated transport cost
-```
-
-Current configured assumptions include:
-
-```text
-Search radius: 50 km
-Road factor: 1.30
-Transport rate: ₹4.50 / tonne-km
-Small-load threshold: 2 tonnes
-```
-
-The exact values are configuration assumptions and should be treated as estimates.
-
-## Logistics architecture
-
-```mermaid
-flowchart TB
-
-    FIELD[Field / Cluster]
-      --> BIOMASS[Recoverable Biomass]
-
-    FIELD --> DIST[Haversine Distance]
-    FAC[Nearest / Matched Facility] --> DIST
-
-    DIST --> ROAD[Road Distance Estimate]
-
-    ROAD --> COST[Transport Cost]
-
-    BIOMASS --> COST
-
-    COST --> LOGISTICS[Logistics Result]
-```
-
-The project retains source-level logistics calculations for multi-source logical fields and can aggregate them to a logical-field result.
-
----
-
-# 💰 16. Estimated Net Profit
-
-Project Parali extends logistics analysis into a transparent economic estimate.
-
-## Formula
+### Estimated Transportation Cost
 
 ```text
 Recoverable Biomass
-        ×
-Biomass Sale Price / tonne
-        =
-Gross Biomass Revenue
-```
-
-Then:
-
-```text
-Gross Biomass Revenue
-        −
+    ×
+Estimated Road Distance
+    ×
+Transport Rate
+    =
 Estimated Transport Cost
-        =
+```
+
+### Estimated Net Profit
+
+```text
+Gross Biomass Revenue
+    -
+Estimated Transport Cost
+    =
 Estimated Net Profit
 ```
 
-### Current configurable sale-price assumption
-
-```text
-₹2,500 / tonne
-```
-
-This should be treated as a model assumption, not a live market quote.
-
-## Economic response
-
-```text
-economics:
-    biomass_sale_price_inr_per_tonne
-    gross_revenue_inr
-    transport_cost_inr
-    net_profit_inr
-    net_profit_per_tonne_inr
-    profit_margin_percent
-```
-
-## Multi-source calculation
-
-For a field such as:
-
-```text
-34
- ├── 2020_34
- └── 2021_34
-```
-
-the system can aggregate:
-
-```text
-Total recoverable biomass
-+
-Source-level logistics costs
-+
-Combined revenue
-=
-Logical-field economics
-```
-
-### Scope of the current profit estimate
-
-The current net-profit calculation is:
-
-```text
-Biomass sale revenue
-−
-Estimated transport cost
-```
-
-It does **not** automatically include:
-
-```text
-Harvesting
-Baling
-Loading
-Labour
-Taxes
-Facility fees
-Equipment costs
-Other operating expenses
-```
-
-Therefore the UI uses:
-
-> **Estimated Net Profit**
-
-rather than realized profit.
+The current economic calculation does not automatically include harvesting, baling, loading, labour, taxes, facility fees, or other operating expenses. Therefore, the result should be interpreted as an **estimated opportunity**, not realized business profit.
 
 ---
 
-# 🧠 17. Business / Intelligence Pipeline
+## 📂 Project Structure
 
-The complete operational chain is:
-
-```text
-┌─────────────────────┐
-│ Satellite Signals   │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Crop Transition     │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Residue Estimation  │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Biomass Opportunity │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Facility Matching   │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Collection Cluster  │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Logistics Estimate  │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Revenue / Cost      │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│ Estimated Net Profit │
-└─────────────────────┘
-```
-
----
-
-# 🔌 18. Backend Architecture
-
-The backend is built around FastAPI and reusable intelligence services.
-
-```text
-backend/
-│
-├── api.py
-│
-├── field_context.py
-├── satellite_service.py
-├── harvest_prediction.py
-├── live_burn_analysis.py
-├── residue_estimation.py
-├── biomass_opportunity.py
-├── biomass_clustering.py
-├── logistics_estimation.py
-├── predict.py
-│
-├── models/
-│   ├── *.pth
-│   └── *.pkl
-│
-└── data/
-    └── processed/
-```
-
-The intended dependency direction is:
-
-```text
-API
- ↓
-Field Context
- ↓
-Shared Satellite / Data Services
- ↓
-Domain Intelligence Modules
- ↓
-API Response
-```
-
-Training scripts remain outside the runtime API path.
-
----
-
-# 🧱 19. Backend Service Responsibilities
-
-| Service | Responsibility |
-|---|---|
-| `field_context.py` | Resolve logical field → source fields + geometry + metadata |
-| `satellite_service.py` | Shared Sentinel-2/GEE observations and spectral features |
-| `harvest_prediction.py` | Crop-transition / harvest-window signal analysis |
-| `live_burn_analysis.py` | Live Sentinel-2 spectral burn intelligence + independent Dual CNN evidence |
-| `residue_estimation.py` | Estimated residue and recoverable biomass |
-| `biomass_opportunity.py` | Facility matching and biomass opportunity |
-| `biomass_clustering.py` | Spatial collection grouping |
-| `logistics_estimation.py` | Distance, road estimate and transport cost |
-| `predict.py` | Existing image-based Dual CNN inference |
-| `api.py` | HTTP API orchestration |
-
----
-
-# ⚛️ 20. Frontend Architecture
-
-The frontend is built using:
-
-```text
-React
-Vite
-Leaflet / React-Leaflet
-Recharts
-CSS
-```
-
-## Frontend architecture
-
-```mermaid
-flowchart TB
-
-    APP[React App]
-
-    APP --> NAV[Navigation / Sections]
-
-    APP --> MAP[FieldMap]
-    APP --> DASH[Dashboard Cards]
-    APP --> INTEL[Intelligence Panel]
-    APP --> DRAWER[FieldDrawer]
-    APP --> BURN[BurnDetector]
-
-    MAP --> API[FastAPI]
-    DASH --> API
-    DRAWER --> API
-    BURN --> API
-
-    API --> BACKEND[Project Parali Backend]
-```
-
----
-
-# 🗺️ 21. Interactive Field Map
-
-The map is a core entry point into the system.
-
-The user can:
-
-```text
-View field polygons
-       ↓
-Inspect field identifiers
-       ↓
-Select a field
-       ↓
-Open field intelligence
-```
-
-Typical selection flow:
-
-```text
-Map Polygon
-    ↓
-Logical Field ID
-    ↓
-/field-analysis/{field_id}
-    ↓
-Field Drawer
-    ↓
-Satellite + Biomass Intelligence
-```
-
-The map is designed to make the platform field-centric rather than purely chart-centric.
-
----
-
-# 🧰 22. Field Intelligence Drawer
-
-A selected field can expose:
-
-### Current Field State
-
-```text
-Area
-Category
-Latest observation
-Current condition
-```
-
-### Live Sentinel-2 Signal
-
-```text
-NDVI
-NBR
-Trend
-Signal strength
-Crop-transition assessment
-```
-
-### Burn Detection
-
-```text
-Burn-related spectral evidence
-Current burn status
-Historical context
-ML evidence where applicable
-```
-
-### Biomass Intelligence
-
-```text
-Residue estimate
-Recoverable biomass
-Facility opportunity
-Collection cluster
-Logistics
-Estimated net profit
-```
-
-### Satellite Timeline
-
-```text
-Date
-NDVI
-NBR
-Relevant spectral signals
-Historical observations
-```
-
----
-
-# 📡 23. API Reference
-
-The current architecture exposes domain-specific endpoints.
-
-## Core
-
-### `GET /`
-
-Returns basic API information.
-
-### `GET /health`
-
-Health check.
-
-Example:
-
-```json
-{
-  "status": "ok"
-}
-```
-
-### `GET /model-info`
-
-Returns loaded model metadata.
-
-### `GET /fields`
-
-Returns the field dataset used by the frontend map.
-
----
-
-## Field Intelligence
-
-### `GET /field-analysis/{field_id}`
-
-Returns combined field-level intelligence.
-
-Typical content:
-
-```text
-Field identity
-Category
-Area
-Latest observation
-NDVI
-NBR
-Time series
-Transition information
-Source-field information
-```
-
----
-
-## Live Satellite Modules
-
-### `GET /live-harvest-prediction/{field_id}`
-
-Returns live crop-transition / harvest-window assessment.
-
-### `GET /live-burn-analysis/{field_id}`
-
-Returns field-driven live burn intelligence based on Sentinel-2 spectral evidence and, when the live scene-rendering path is available, independent Dual CNN evidence.
-
----
-
-## Biomass Modules
-
-### `GET /residue-estimation/{field_id}`
-
-Returns estimated residue and recoverable biomass.
-
-### `GET /biomass-opportunity/{field_id}`
-
-Returns nearby biomass facilities and opportunity information.
-
-### `GET /biomass-cluster/{field_id}`
-
-Returns the field's collection cluster information.
-
-### `GET /biomass-clusters`
-
-Returns available biomass clusters.
-
-### `GET /logistics-estimation/{field_id}`
-
-Returns distance, estimated road distance and transport cost.
-
----
-
-## Manual ML Inference
-
-### `POST /predict`
-
-Accepts the image inputs required by the existing Dual RGB + SWIR model.
-
-Expected classes:
-
-```text
-No Burn
-Burn
-```
-
-This endpoint is conceptually separate from live field satellite analysis.
-
----
-
-# 🔗 24. Golden End-to-End Field Flow
-
-A key release test is the multi-source field:
-
-```text
-34
-```
-
-Expected architecture:
-
-```text
-34
- ↓
-2020_34 + 2021_34
- ↓
-Combined Field Context
- ↓
-Combined Geometry
- ↓
-Sentinel-2
- ↓
-Harvest / Transition
- ↓
-Burn Intelligence
- ↓
-Residue
- ↓
-Biomass Opportunity
- ↓
-Clustering
- ↓
-Logistics
- ↓
-Revenue
- ↓
-Estimated Net Profit
- ↓
-React Field Drawer
-```
-
-A single-source compatibility test is:
-
-```text
-343
- ↓
-2021_343
- ↓
-Single Source Geometry
- ↓
-Same intelligence pipeline
-```
-
-This verifies both the logical grouping architecture and the single-source fallback.
-
----
-
-# 📁 25. Recommended Project Structure
+The main application is organized into frontend, backend, data, and model components.
 
 ```text
 Project-Parali/
-│
 ├── backend/
 │   ├── api.py
 │   ├── field_context.py
@@ -1552,1445 +286,241 @@ Project-Parali/
 │   ├── biomass_clustering.py
 │   ├── logistics_estimation.py
 │   ├── predict.py
-│   │
 │   ├── models/
-│   │   ├── parali_dual_rgb_swir.pth
-│   │   ├── parali_dual_best.pth
-│   │   ├── parali_resnet18.pth
-│   │   └── parali_harvest_stage_rf.pkl
-│   │
 │   └── requirements.txt
 │
 ├── data/
 │   ├── sangrur/
-│   │   ├── partially_completely_burnt_2020_11_10.geojson
-│   │   └── partially_completely_burnt_2021_10_29.geojson
-│   │
 │   └── processed/
-│       ├── sangrur_fields.geojson
-│       ├── field_ndvi_timeseries.csv
-│       ├── harvest_windows.csv
-│       ├── sangrur_ml_features.csv
-│       ├── final_model_comparison.csv
-│       └── timeseries_plots/
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── FieldMap.jsx
-│   │   ├── index.css
-│   │   ├── styles.css
-│   │   │
 │   │   └── components/
-│   │       ├── FieldDrawer.jsx
-│   │       ├── BurnDetector.jsx
-│   │       ├── DashboardCards.jsx
-│   │       ├── IntelligencePanel.jsx
-│   │       └── MapLegend.jsx
-│   │
 │   ├── package.json
 │   └── ...
 │
 ├── .env.example
 ├── .gitignore
-├── .gitattributes
-├── README.md
-└── ...
+└── README.md
 ```
+
+*This is a representative structure; refer to the actual repository for the complete file layout.*
 
 ---
 
-# 💻 26. Local Development
+## ⚙️ Installation and Local Setup
 
-## Prerequisites
+### Prerequisites
 
-Recommended:
+Install the following before running the project:
 
-```text
-Python 3.11+
-Node.js
-npm
-Git
-Git LFS
-Google Earth Engine account/project
+- Python 3.11 or later
+- Node.js and npm
+- Git
+- Git LFS, where required for large model files
+- An appropriately configured Google Earth Engine account and project
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/Project-Parali.git
+cd Project-Parali
 ```
 
----
+Replace the repository URL with the actual project URL.
 
-# 🐍 27. Backend Setup
-
-From the project root:
+### 2. Configure the Backend
 
 ```powershell
 cd backend
 python -m venv venv
-```
-
-Activate the environment:
-
-```powershell
 .\venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```powershell
 pip install -r requirements.txt
 ```
 
-### Live CNN rendering dependencies
+Start the FastAPI server:
 
-The live burn spectral analysis can operate independently, but live Sentinel-2 CNN rendering also requires:
-
-```powershell
-pip install requests rasterio pillow
-```
-
-These packages are used to download, read and render the bounded Sentinel-2 scene chip before passing RGB and SWIR images to the existing Dual RGB + SWIR ResNet18 model.
-
-Run FastAPI:
-
-```powershell
+```bash
 uvicorn api:app --reload
 ```
 
-Backend:
+The backend will typically be available at:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Swagger:
+Interactive API documentation:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
----
+### 3. Configure the Frontend
 
-# ⚛️ 28. Frontend Setup
+Open a separate terminal:
 
-Open another terminal:
-
-```powershell
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Frontend:
+The Vite development server will typically be available at:
 
 ```text
 http://localhost:5173
 ```
 
-Configure the frontend API URL with:
-
-```text
-VITE_API_URL
-```
-
-Example:
+Configure the frontend API URL using the environment variable:
 
 ```env
 VITE_API_URL=http://127.0.0.1:8000
 ```
 
-For production, point it to the deployed API.
+Use the appropriate deployed API URL in production.
+
+### 4. Configure Google Earth Engine
+
+Before using live satellite functionality:
+
+1. Configure an eligible Google Earth Engine project.
+2. Authenticate using the project's supported authentication workflow.
+3. Ensure the backend can access the required Sentinel-2 collection.
+4. Verify that satellite queries work for the available field geometries.
+
+Never commit private credentials or service-account keys.
 
 ---
 
-# 🌍 29. Google Earth Engine Setup
+## 📡 API Reference
 
-Project Parali uses Google Earth Engine for satellite data access and processing.
+The backend exposes domain-specific endpoints through FastAPI.
 
-Before using live Sentinel-2 functionality:
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/` | Basic API information |
+| GET | `/health` | Backend health check |
+| GET | `/model-info` | Loaded model metadata |
+| GET | `/fields` | Field dataset used by the frontend |
+| GET | `/field-analysis/{field_id}` | Combined field intelligence |
+| GET | `/live-harvest-prediction/{field_id}` | Crop-transition assessment |
+| GET | `/live-burn-analysis/{field_id}` | Live burn intelligence |
+| GET | `/residue-estimation/{field_id}` | Residue and biomass estimation |
+| GET | `/biomass-opportunity/{field_id}` | Potential nearby facility opportunities |
+| GET | `/biomass-cluster/{field_id}` | Collection-cluster information |
+| GET | `/biomass-clusters` | Available biomass clusters |
+| GET | `/logistics-estimation/{field_id}` | Distance and transport-cost estimates |
+| POST | `/predict` | Manual image-based ML inference |
 
-```text
-Google Earth Engine account
-        ↓
-Cloud / project configuration
-        ↓
-Authentication
-        ↓
-Satellite service
-```
-
-Verify the environment with the project's Earth Engine test script where available.
-
-Never commit private Earth Engine credentials.
-
----
-
-# 🔬 30. Data Pipeline
-
-## Prepare field data
-
-```powershell
-python prepare_sangrur.py
-```
-
-Output:
-
-```text
-data/processed/sangrur_fields.geojson
-```
-
-## Extract satellite time series
-
-```powershell
-python harvest_timeseries.py
-```
-
-Output:
-
-```text
-data/processed/field_ndvi_timeseries.csv
-```
-
-## Detect candidate crop transitions
-
-```powershell
-python detect_harvest_window.py
-```
-
-Output:
-
-```text
-data/processed/harvest_windows.csv
-```
-
-## Plot time series
-
-```powershell
-python plot_timeseries.py
-```
+Consult the running API documentation for the actual request schemas, response fields, and validation requirements.
 
 ---
 
-# 🤖 31. ML Training
+## 🧪 Testing and Validation
 
-## Classical baseline
+The project should be validated at multiple levels.
 
-```powershell
-python train_baseline.py
-```
+### Backend Validation
+- Confirm the API starts successfully.
+- Verify the health endpoint.
+- Check that model metadata is returned correctly.
 
-## SVM
+### Field Data Validation
+- Confirm that `/fields` returns valid field data.
+- Verify logical-field and source-field relationships.
+- Check that geometry, area, and metadata are consistent.
 
-```powershell
-python train_svm.py
-```
+### Intelligence Service Validation
+- Test crop-transition analysis.
+- Test live burn analysis.
+- Test biomass estimation and facility matching.
+- Test clustering and logistics calculations.
+- Verify that optional CNN failures do not prevent spectral results from being returned.
 
-## RGB CNN
-
-```powershell
-python train_cnn.py
-```
-
-## Dual RGB + SWIR CNN
-
-```powershell
-python train_dual_cnn.py
-```
-
-## Harvest-stage classifier
-
-```powershell
-python train_harvest_stage.py
-```
+### End-to-End Validation
+- Load the frontend dashboard.
+- Render the interactive map.
+- Select a field.
+- Verify satellite observations and field context.
+- Confirm that biomass, logistics, and economic information appear when the required inputs are available.
 
 ---
 
-# 🧪 32. Testing Strategy
-
-Project Parali should be tested at four levels.
-
-## Level 1 — Backend health
-
-```text
-GET /
-GET /health
-GET /model-info
-```
-
-## Level 2 — Data integrity
-
-```text
-GET /fields
-GET /field-analysis/34
-GET /field-analysis/343
-```
-
-Verify:
-
-```text
-34 → 2020_34 + 2021_34
-343 → 2021_343
-```
-
-## Level 3 — Intelligence services
-
-Test:
-
-```text
-/live-harvest-prediction/34
-/live-burn-analysis/34
-/residue-estimation/34
-/biomass-opportunity/34
-/biomass-cluster/34
-/logistics-estimation/34
-```
-
-For `/live-burn-analysis/34`, verify that:
-
-```text
-Spectral evidence
-+
-ml_model
-```
-
-are returned independently.
-
-When live CNN dependencies and the model are available, `ml_model.available` should be `true`. If the optional rendering path fails, the endpoint should still return the spectral burn analysis with `ml_model.available` set to `false`.
-
-## Level 4 — End-to-end UI
-
-Test:
-
-```text
-Load dashboard
- ↓
-Render map
- ↓
-Click field 34
- ↓
-Load field context
- ↓
-Load satellite signals
- ↓
-Load biomass modules
- ↓
-Load logistics
- ↓
-Load estimated economics
-```
-
----
-
-# ✅ 33. Release Checklist
+## 🔐 Security and Configuration
 
 Before deployment:
 
-```text
-[ ] Backend starts successfully
-[ ] Frontend builds successfully
-[ ] /health returns OK
-[ ] /fields returns valid GeoJSON
-[ ] Field 34 works
-[ ] Field 343 works
-[ ] Multi-source geometry is correct
-[ ] Single-source geometry is correct
-[ ] Sentinel-2 queries work
-[ ] Satellite failures are handled gracefully
-[ ] Harvest module responds
-[ ] Burn module responds
-[ ] Live burn spectral evidence is returned
-[ ] Live CNN rendering dependencies are installed
-[ ] Live CNN scene extraction stays within the bounded chip configuration
-[ ] Live CNN evidence is reported independently from spectral evidence
-[ ] Residue module responds
-[ ] Opportunity module responds
-[ ] Cluster module responds
-[ ] Logistics module responds
-[ ] Estimated net profit is displayed only when inputs are available
-[ ] No secret is committed
-[ ] Production CORS is configured
-[ ] Frontend API URL is environment-based
-[ ] Large model files use Git LFS where appropriate
-[ ] README matches actual architecture
-```
+- Keep API keys and private credentials out of source control.
+- Use `.env.example` to document required environment variables without including real secrets.
+- Configure production CORS rules.
+- Store deployment-specific values in environment configuration.
+- Validate incoming API requests.
+- Handle satellite-service failures gracefully.
+- Use Git LFS or appropriate model storage for large model artifacts.
+- Review repository contents before publishing.
 
 ---
 
-# ☁️ 34. Production Deployment Architecture
+## ⚠️ Limitations
 
-The target deployment separates the frontend, API runtime and external data/model services.
+Project Parali provides decision-support estimates rather than guaranteed ground truth.
 
-```mermaid
-flowchart TB
+- Crop-transition signals do not independently confirm actual harvest dates.
+- Burn-related spectral changes require contextual interpretation.
+- Existing CNN benchmark metrics do not establish Sentinel-2 field-level model accuracy.
+- Biomass quantities depend on configurable agricultural assumptions.
+- Straight-line distance multiplied by a road factor is an approximation, not live route calculation.
+- Economic estimates depend on sale price, transport rate, road factor, and biomass assumptions.
+- The current net-profit estimate excludes several operating expenses.
 
-    USER[User Browser]
-
-    CDN[Frontend Hosting / CDN]
-    FE[React Production Build]
-
-    API[FastAPI Container]
-
-    GEE[Google Earth Engine]
-    MODEL[Model Storage / Git LFS / Object Storage]
-    DATA[Processed Data / GeoJSON]
-    LOG[Logging / Monitoring]
-
-    USER --> CDN
-    CDN --> FE
-
-    FE --> API
-
-    API --> GEE
-    API --> MODEL
-    API --> DATA
-    API --> LOG
-```
+These limitations should be considered when interpreting results or using the platform for operational decisions.
 
 ---
 
-# 🐳 35. Container Architecture
+## 🛣️ Future Improvements
 
-The backend can be containerized as:
+Potential areas for further development include:
 
-```text
-                ┌─────────────────────┐
-                │   FastAPI Container  │
-                │                     │
-                │ API                 │
-                │ Field Context       │
-                │ Satellite Services  │
-                │ ML Inference        │
-                │ Biomass Services    │
-                │ Logistics           │
-                └─────────┬───────────┘
-                          │
-             ┌────────────┼────────────┐
-             ↓            ↓            ↓
-           GEE         Model Store   Data Store
-```
-
-The frontend can be built independently:
-
-```text
-React Source
-    ↓
-npm run build
-    ↓
-Static Assets
-    ↓
-CDN / Static Hosting
-```
+- Training and validating a native Sentinel-2 burn-detection model.
+- Incorporating field-level harvest-date ground truth.
+- Improving biomass estimates with region-specific crop and residue data.
+- Integrating road-network routing and more accurate travel-cost estimates.
+- Expanding biomass-facility data coverage.
+- Adding uncertainty estimates and model explainability.
+- Introducing historical trend comparisons and monitoring.
+- Validating economic assumptions against real-world collection operations.
 
 ---
 
-# 🌐 36. Environment Configuration
-
-Production values should not be hard-coded.
-
-Recommended environment variables include:
-
-```env
-VITE_API_URL=
-FRONTEND_URL=
-GEE_PROJECT_ID=
-MODEL_PATH=
-BIOMASS_SALE_PRICE_INR_PER_TONNE=
-TRANSPORT_RATE_INR_PER_TONNE_KM=
-ROAD_FACTOR=
-```
-
-The exact variable names should match the production configuration implemented in the repository.
-
----
-
-# 🔐 37. Security
-
-Never commit:
-
-```text
-.env
-API keys
-Passwords
-Cloud credentials
-Earth Engine private credentials
-Service-account JSON
-Database credentials
-Private tokens
-Secrets
-```
-
-Use:
-
-```text
-.env
-.env.example
-Secret manager / deployment environment
-```
-
-### Git hygiene
-
-Project Parali can use Git LFS for large model artifacts.
-
-Before pushing:
-
-```powershell
-git status
-git diff
-git diff --cached
-```
-
-Search for secrets before creating a public release.
-
----
-
-# 📦 38. Important Data Artifacts
-
-| Artifact | Purpose |
-|---|---|
-| `sangrur_fields.geojson` | Field boundaries and attributes |
-| `field_ndvi_timeseries.csv` | Historical / processed field time series |
-| `harvest_windows.csv` | Candidate crop-transition results |
-| `sangrur_ml_features.csv` | ML feature dataset |
-| `final_model_comparison.csv` | Model comparison |
-| `model_accuracy_comparison.png` | Model evaluation visualization |
-| `*.pth` | PyTorch model artifacts |
-| `*.pkl` | Classical ML model artifacts |
-
----
-
-# 📊 39. Data Model Concept
-
-At a logical level, Project Parali works with:
-
-```text
-Field
-│
-├── identity
-│
-├── source records
-│
-├── geometry
-│
-├── area
-│
-├── satellite observations
-│
-├── indicators
-│
-├── transition signals
-│
-├── burn signals
-│
-├── biomass estimate
-│
-├── facility opportunities
-│
-├── cluster
-│
-├── logistics
-│
-└── economics
-```
-
-A field therefore becomes the central domain object around which different services operate.
-
----
-
-# 🔁 40. Request Sequence Architecture
-
-A selected field can follow this request sequence:
-
-```mermaid
-sequenceDiagram
-
-    participant U as User
-    participant R as React
-    participant A as FastAPI
-    participant C as Field Context
-    participant S as Satellite Service
-    participant H as Harvest
-    participant B as Burn
-    participant BI as Biomass
-    participant L as Logistics
-    participant E as Economics
-    participant G as Earth Engine
-
-    U->>R: Select field 34
-    R->>A: GET /field-analysis/34
-    A->>C: Resolve field
-    C-->>A: 2020_34 + 2021_34
-
-    A->>S: Get shared satellite series
-    S->>G: Query Sentinel-2
-    G-->>S: Observations
-    S-->>A: Field time series
-
-    A->>H: Analyze crop transition
-    H-->>A: Transition assessment
-
-    A->>B: Analyze burn signals
-    B-->>A: Burn intelligence
-
-    A->>BI: Estimate biomass / opportunity
-    BI-->>A: Biomass + facility match
-
-    A->>L: Estimate logistics
-    L-->>A: Distance + transport cost
-
-    A->>E: Calculate economics
-    E-->>A: Estimated revenue + net profit
-
-    A-->>R: Field intelligence response
-    R-->>U: Render field dashboard
-```
-
-In an optimized implementation, shared satellite observations can be cached or reused so multiple intelligence modules do not repeatedly perform identical satellite work.
-
----
-
-# 🧠 41. Architecture Decision: Why a Shared Satellite Service?
-
-Without a shared service:
-
-```text
-Harvest → Earth Engine
-Burn    → Earth Engine
-Residue → Earth Engine
-Dashboard → Earth Engine
-```
-
-This can create duplicated logic and repeated queries.
-
-With a shared service:
-
-```text
-                    ┌── Harvest
-                    │
-Field Context
-      ↓             ├── Burn
-Shared Satellite ───┤
-      │             ├── Dashboard
-      │             │
-      │             └── Other services
-      ↓
- Cached observation set
-```
-
-Benefits:
-
-- Consistent preprocessing
-- Consistent field geometry
-- Easier debugging
-- Fewer duplicate queries
-- Centralized cloud handling
-- Easier future optimization
-
----
-
-# 🧠 42. Architecture Decision: Logical Fields
-
-Historical datasets can contain the same field number across multiple source years.
-
-Treating:
-
-```text
-34
-```
-
-as a simple string would lose the relationship between:
-
-```text
-2020_34
-2021_34
-```
-
-The logical-field architecture keeps:
-
-```text
-logical identity
-+
-source provenance
-+
-combined geometry
-```
-
-This gives the application a stable field-level interface while retaining historical context.
-
----
-
-# 🧠 43. Architecture Decision: Evidence-Based Intelligence
-
-Project Parali avoids making every upstream signal a hard classification.
-
-For example:
-
-```text
-NDVI ↓
-```
-
-is not automatically:
-
-```text
-Harvest confirmed
-```
-
-and:
-
-```text
-NBR ↓
-```
-
-is not automatically:
-
-```text
-Burn confirmed
-```
-
-Instead:
-
-```text
-Multiple observations
-       ↓
-Trend analysis
-       ↓
-Evidence aggregation
-       ↓
-Signal strength / status
-       ↓
-Human-readable reasons
-```
-
-This approach keeps the system interpretable and makes future model replacement easier.
-
----
-
-# ⚠️ 44. Known Limitations
-
-## 1. Burn-model domain limitation
-
-The reported Dual CNN benchmark comes from the crop-burn image dataset and has not been established as equivalent accuracy on raw Sangrur Sentinel-2 field data.
-
-## 2. Harvest-date limitation
-
-Current transition dates are candidate dates derived from vegetation patterns; they are not validated harvest dates unless supported by field-level ground truth.
-
-## 3. Biomass estimation limitation
-
-Biomass is estimated from configured assumptions. It is not direct measurement of baled or physically collected residue.
-
-## 4. Satellite limitations
-
-Cloud cover, image availability, field size and temporal gaps can affect satellite time-series quality.
-
-## 5. Geographic generalization
-
-Model and heuristic performance can change across:
-
-```text
-Regions
-Crops
-Seasons
-Sensors
-Preprocessing pipelines
-```
-
-## 6. Logistics limitation
-
-The current road-distance model can use a road-factor approximation rather than a live road network route.
-
-Therefore:
-
-```text
-Estimated road distance
-```
-
-is not necessarily equivalent to an actual truck navigation route.
-
-## 7. Live CNN scene-extraction limitation
-
-The live CNN bridge uses a bounded `512×512` Sentinel-2 scene representation instead of requesting the entire selected field at native 10 m resolution.
-
-This protects the live inference path from oversized Earth Engine download requests, but it also means the live CNN input is a bounded/resampled representation of the selected field rather than an unrestricted native-resolution raster covering the entire field.
-
-The field-level spectral analysis remains geometry-based and is reported separately.
-
-## 8. Economic limitation
-
-Current net profit is intentionally limited to:
-
-```text
-Estimated biomass revenue
-−
-Estimated transport cost
-```
-
-Other operational expenses are not automatically included.
-
----
-
-# 📈 45. Observability & Production Improvements
-
-For a production deployment, the next infrastructure improvements should include:
-
-```text
-Structured logging
-       ↓
-Request IDs
-       ↓
-Latency monitoring
-       ↓
-Earth Engine error tracking
-       ↓
-Model inference monitoring
-       ↓
-Cache metrics
-       ↓
-Health checks
-```
-
-Recommended future platform components:
-
-```text
-Docker
-GitHub Actions
-Cloud Run / ECS / EC2 / equivalent
-Object Storage
-Managed database
-Centralized logs
-Application monitoring
-```
-
----
-
-# 🔮 46. Future Architecture
-
-The longer-term system can evolve toward:
-
-```mermaid
-flowchart TB
-
-    SAT[Sentinel-2 / Future Satellite Sources]
-    EE[Earth Engine / Satellite Gateway]
-    PRE[Preprocessing]
-    FEAT[Geospatial + Spectral Features]
-
-    FIELD[Field Context Engine]
-
-    TS[Temporal Intelligence]
-    BURN[Native Sentinel-2 Burn Model]
-    STAGE[Crop Stage Model]
-
-    BIO[Biomass Estimator]
-    MATCH[Facility Matching]
-    CLUSTER[Collection Clustering]
-
-    ROUTE[Road Network / Route Optimization]
-    PLAN[Collection Planning]
-    ECON[Profit / Unit Economics]
-
-    API[FastAPI]
-    UI[React Operations Dashboard]
-
-    SAT --> EE
-    EE --> PRE
-    PRE --> FEAT
-
-    FIELD --> TS
-    FEAT --> TS
-
-    FIELD --> BURN
-    FEAT --> BURN
-
-    FIELD --> STAGE
-    FEAT --> STAGE
-
-    TS --> BIO
-    STAGE --> BIO
-
-    BIO --> MATCH
-    BIO --> CLUSTER
-
-    MATCH --> ROUTE
-    CLUSTER --> ROUTE
-
-    ROUTE --> PLAN
-    PLAN --> ECON
-
-    TS --> API
-    BURN --> API
-    BIO --> API
-    MATCH --> API
-    CLUSTER --> API
-    ROUTE --> API
-    ECON --> API
-
-    API --> UI
-```
-
----
-
-# 🧭 47. Long-Term Feature Roadmap
-
-## Phase 1 — Satellite + ML Foundation
-
-Completed foundation:
-
-```text
-Dataset analysis
-Field preparation
-Sentinel-2 integration
-NDVI / NBR
-Time-series processing
-Classical ML
-SVM
-RGB CNN
-Dual RGB + SWIR CNN
-Harvest-stage modeling
-FastAPI
-React
-Leaflet
-Field-level analysis
-```
-
-This foundation forms the current Phase 1 baseline.
-
----
-
-## Phase 2 — Field Intelligence
-
-```text
-Field Context
-      ↓
-Current Satellite State
-      ↓
-Live Transition Intelligence
-      ↓
-Live Burn Intelligence
-      ↓
-Satellite Timeline
-```
-
----
-
-## Phase 3 — Biomass Intelligence
-
-```text
-Transition
-     ↓
-Residue Estimate
-     ↓
-Recoverable Biomass
-     ↓
-Biomass Opportunity
-     ↓
-Facility Matching
-```
-
----
-
-## Phase 4 — Operations
-
-```text
-Biomass Opportunity
-      ↓
-Spatial Clustering
-      ↓
-Collection Planning
-      ↓
-Logistics
-      ↓
-Route Optimization
-```
-
----
-
-## Phase 5 — Economics
-
-```text
-Biomass Quantity
-      ↓
-Sale Price
-      ↓
-Gross Revenue
-      ↓
-Transport Cost
-      ↓
-Operating Costs
-      ↓
-Net Margin / Profit
-```
-
----
-
-## Phase 6 — Production Intelligence
-
-```text
-Cloud Deployment
-      ↓
-Continuous Satellite Refresh
-      ↓
-Event Detection
-      ↓
-Alerts
-      ↓
-Facility Dashboards
-      ↓
-Collection Scheduling
-```
-
----
-
-# 👥 48. Contribution Areas
-
-Project Parali is naturally divided into independent engineering areas.
-
-## ML Team
-
-```text
-Dataset preparation
-Feature engineering
-Model training
-Evaluation
-Model explainability
-Native Sentinel-2 model
-Model monitoring
-```
-
-## Satellite / GIS Team
-
-```text
-Earth Engine
-Sentinel-2 processing
-NDVI
-NBR
-Spectral analytics
-Field geometry
-Time series
-Spatial analysis
-```
-
-## Backend Team
-
-```text
-FastAPI
-Service architecture
-Validation
-Error handling
-Performance
-Caching
-API contracts
-Authentication
-```
-
-## Frontend Team
-
-```text
-React
-Interactive map
-Field dashboard
-Charts
-Field drawer
-Biomass UI
-Facility visualization
-Responsive design
-```
-
-## Data / Analytics Team
-
-```text
-Biomass assumptions
-Validation
-Economic models
-Regional statistics
-Data quality
-```
-
-## DevOps Team
-
-```text
-Docker
-CI/CD
-Cloud deployment
-Secrets
-Monitoring
-Logging
-Model storage
-```
-
----
-
-# 🌿 49. Git Workflow
-
-Before starting work:
-
-```powershell
-git pull origin main
-```
-
-Create a feature branch:
-
-```powershell
-git checkout -b feature/<feature-name>
-```
-
-Commit:
-
-```powershell
-git add .
-git commit -m "Describe the change"
-```
-
-Push:
-
-```powershell
-git push -u origin feature/<feature-name>
-```
-
-Then create a Pull Request.
-
-For major architecture changes, avoid direct changes to `main`.
-
----
-
-# 🧪 50. Pull Request Checklist
-
-```text
-[ ] Application starts
-[ ] Backend starts
-[ ] Frontend starts
-[ ] Existing API contracts remain valid
-[ ] Field map still loads
-[ ] Field 34 still resolves to 2020_34 + 2021_34
-[ ] Single-source fields still work
-[ ] Satellite service still works
-[ ] ML inference still works
-[ ] Biomass modules still work
-[ ] Logistics still works
-[ ] Economics calculation is correct
-[ ] UI remains responsive
-[ ] No secrets committed
-[ ] No unnecessary generated files
-[ ] README updated when architecture changes
-[ ] Tests or manual verification completed
-```
-
----
-
-# 🧠 51. Development Principles
-
-### Do not break working functionality
-
-New modules should build on the established pipeline rather than replacing it unnecessarily.
-
-### Keep ML training separate from API runtime
-
-Training scripts should remain separate from `api.py`.
-
-### Keep services modular
-
-Avoid building a single monolithic function containing:
-
-```text
-Satellite
-+
-Harvest
-+
-Burn
-+
-Biomass
-+
-Logistics
-+
-Economics
-```
-
-Instead:
-
-```text
-Small domain services
-       ↓
-Clear interfaces
-       ↓
-Composable intelligence
-```
-
-### Preserve source provenance
-
-Never discard the relationship between:
-
-```text
-Logical Field
-```
-
-and:
-
-```text
-Source-Year Fields
-```
-
-### Make assumptions explicit
-
-Every economic or biomass assumption should be discoverable and documented.
-
----
-
-# 📚 52. Recommended Reading Order for Contributors
-
-A new contributor should understand the system in this sequence:
-
-```text
-README.md
-   ↓
-Project Structure
-   ↓
-field_context.py
-   ↓
-satellite_service.py
-   ↓
-api.py
-   ↓
-harvest_prediction.py
-   ↓
-live_burn_analysis.py
-   ↓
-residue_estimation.py
-   ↓
-biomass_opportunity.py
-   ↓
-biomass_clustering.py
-   ↓
-logistics_estimation.py
-   ↓
-predict.py
-   ↓
-frontend/src/App.jsx
-   ↓
-frontend/src/FieldMap.jsx
-   ↓
-frontend/src/components/
-   ↓
-Data / Models
-```
-
----
-
-# 🏁 53. What Makes the Architecture Useful?
-
-Project Parali is not designed as only:
-
-```text
-Satellite Image
-      ↓
-Prediction
-```
-
-Its live burn pathway explicitly separates field-level spectral intelligence from independent image-model evidence:
-
-```text
-Sentinel-2 Field
-      ↓
-Field Context
-      ↓
-┌────────────────────────────┐
-│ Spectral Evidence          │
-│ +                          │
-│ Independent Dual CNN       │
-└─────────────┬──────────────┘
-              ↓
-        Field Intelligence
-```
-
-It is designed as:
-
-```text
-Satellite
-    ↓
-Field
-    ↓
-Evidence
-    ↓
-Intelligence
-    ↓
-Biomass
-    ↓
-Facility
-    ↓
-Collection
-    ↓
-Logistics
-    ↓
-Economics
-```
-
-This gives each field a path from **observation to operational context**.
-
----
-
-# 🎯 54. Executive Summary
-
-Project Parali combines:
-
-```text
-🛰️ Remote Sensing
-+
-🗺️ Geospatial Intelligence
-+
-🤖 Machine Learning
-+
-🌱 Time-Series Analytics
-+
-🌾 Biomass Estimation
-+
-🏭 Facility Matching
-+
-📍 Spatial Clustering
-+
-🚚 Logistics
-+
-💰 Economic Estimation
-+
-⚛️ Full-Stack Web Engineering
-```
-
-The central design principle is:
-
-> **Do not treat agricultural residue as an isolated detection problem. Treat it as a field-level intelligence, collection and utilization problem.**
-
----
-
-# 🌾 55. Final Architecture
-
-```text
-                         PROJECT PARALI
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │     FIELD CONTEXT   │
-                   └──────────┬──────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │ SENTINEL-2 / GEE    │
-                   │ NDVI NBR SWIR       │
-                   └──────────┬──────────┘
-                              │
-               ┌──────────────┴──────────────┐
-               ▼                             ▼
-     ┌─────────────────────┐      ┌─────────────────────┐
-     │ Crop Transition     │      │ Burn Intelligence   │
-     │ / Harvest Signals   │      │ Spectral + ML       │
-     └──────────┬──────────┘      └──────────┬──────────┘
-                └──────────────┬──────────────┘
-                               ▼
-                    ┌────────────────────┐
-                    │ RESIDUE ESTIMATION │
-                    └──────────┬─────────┘
-                               ▼
-                    ┌────────────────────┐
-                    │ BIOMASS OPPORTUNITY│
-                    └──────────┬─────────┘
-                               ▼
-                ┌──────────────┴──────────────┐
-                ▼                             ▼
-       ┌────────────────┐            ┌─────────────────┐
-       │ Facility Match │            │ Spatial Cluster │
-       └───────┬────────┘            └────────┬────────┘
-               └──────────────┬───────────────┘
-                              ▼
-                    ┌────────────────────┐
-                    │ LOGISTICS ESTIMATE │
-                    └──────────┬─────────┘
-                               ▼
-                    ┌────────────────────┐
-                    │   ECONOMICS        │
-                    │ Revenue / Cost     │
-                    │ Estimated Profit   │
-                    └──────────┬─────────┘
-                               ▼
-                    ┌────────────────────┐
-                    │ REACT OPERATIONS   │
-                    │     DASHBOARD      │
-                    └────────────────────┘
-```
-
----
-
-# 🌍 56. Final Goal
-
-The long-term goal is a system in which agricultural residue can be:
-
-```text
-IDENTIFIED
-    ↓
-UNDERSTOOD
-    ↓
-ESTIMATED
-    ↓
-GEOGRAPHICALLY ORGANIZED
-    ↓
-MATCHED
-    ↓
-COLLECTED
-    ↓
-TRANSPORTED
-    ↓
-ECONOMICALLY EVALUATED
-    ↓
-UTILIZED AS BIOMASS
-```
-
-Project Parali therefore moves toward:
-
-## **Satellite Intelligence → Field Intelligence → Biomass Intelligence → Operational Intelligence**
-
----
-
-# 🆕 57. Live Burn Implementation Update
-
-The current live burn implementation extends the original field-level spectral analysis with an optional live bridge to the existing Dual RGB + SWIR ResNet18 model.
-
-The important runtime design is:
-
-```text
-Logical Field
-     ↓
-Resolved Geometry
-     ↓
-Latest usable Sentinel-2 scene
-     ├── Field-level spectral analysis
-     │
-     └── Bounded 512×512 scene extraction
-                ↓
-          RGB / SWIR rendering
-                ↓
-        Existing Dual RGB + SWIR CNN
-                ↓
-        Independent ML evidence
-```
-
-The bounded scene extraction is an implementation safeguard against oversized Earth Engine download requests. It does not change the model weights or the training dataset.
-
-The live CNN output remains explicitly cross-domain evidence until a Sentinel-2-native burn model is trained and validated.
-
----
-
-# 📄 License
-
-Add the project's actual license here before publishing the repository.
+## 🤝 Contributing
+
+Contributions, ideas, bug reports, and improvements are welcome.
+
+1. Fork the repository or create a feature branch if you have collaborator access.
+2. Create a branch for your changes.
+3. Keep changes focused and consistent with the existing architecture.
+4. Test affected functionality.
+5. Commit your changes with a descriptive message.
+6. Open a pull request with a clear summary and testing notes.
 
 Example:
 
-```text
-MIT License
+```bash
+git checkout -b feature/your-feature
+git add .
+git commit -m "Add your feature"
+git push -u origin feature/your-feature
 ```
-
-Do not declare a license unless the repository owner has chosen one.
 
 ---
 
-# 🌾 Project Parali
+## 📄 License
 
-<p align="center">
+Add the project's chosen license before distributing or publishing the repository. No license should be assumed until the repository owner selects one.
 
-### **Satellite Intelligence → Field Intelligence → Biomass Intelligence**
+---
 
-**Built to transform agricultural residue data into actionable field and biomass intelligence.**
-
-</p>
+**Project Parali — From Satellite Intelligence to Biomass Opportunity.**
